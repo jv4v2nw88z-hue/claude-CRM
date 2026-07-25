@@ -29,9 +29,22 @@ export function isEmailEnabled(env: Env): boolean {
   return Boolean(env.RESEND_API_KEY);
 }
 
+/**
+ * The documents bucket, when one is bound.
+ *
+ * Read through an optional view of `Env` rather than off it directly: the R2
+ * binding is genuinely optional (uploads are a feature you can decline, and R2
+ * has to be enabled on the account before a bucket can exist), so commenting
+ * out `r2_buckets` in wrangler.jsonc drops `DOCUMENTS` from the type `wrangler
+ * types` generates. This keeps both configurations compiling.
+ */
+export function documentsBucket(env: Env): R2Bucket | undefined {
+  return (env as { DOCUMENTS?: R2Bucket }).DOCUMENTS;
+}
+
 /** R2 is a binding, so "configured" simply means the bucket was bound. */
 export function isStorageEnabled(env: Env): boolean {
-  return Boolean(env.DOCUMENTS);
+  return Boolean(documentsBucket(env));
 }
 
 /**

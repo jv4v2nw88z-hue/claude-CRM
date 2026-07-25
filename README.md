@@ -34,6 +34,13 @@ Because one Worker serves the app *and* the API, the session cookie is first-par
 
 You need a Cloudflare account on the **Workers Paid plan ($5/month)** — see [Why the Paid plan](#why-the-paid-plan) below.
 
+> **Already done for the production account.** The D1 database
+> `midigitalexpansion-crm` exists (id `c76d91ea-…`, ENAM, already committed to
+> `server/wrangler.jsonc`), the schema is applied, and it holds the seeded users,
+> six automation rules and five founding clients. Steps 1, 4 and 5 below are
+> history for that account — what remains is `JWT_SECRET` (step 3) and the
+> deploy. Uploads are off until R2 is enabled; see step 2.
+
 ```bash
 npm run install:all
 npx wrangler login
@@ -46,7 +53,11 @@ cd server
 npx wrangler d1 create midigitalexpansion-crm
 ```
 
-**2. Create the documents bucket** (skip it if you don't want file uploads — delete the `r2_buckets` block instead and the Documents tab will report uploads disabled):
+**2. Create the documents bucket.** R2 has to be enabled on the account first — a
+one-time opt-in under **Storage & Databases → R2** that asks for a payment
+method. Until it is, the API refuses with `10042` and the `r2_buckets` block in
+`server/wrangler.jsonc` stays commented out, which leaves the Documents tab
+reporting uploads disabled rather than erroring. Everything else works without it.
 
 ```bash
 npx wrangler r2 bucket create midigitalexpansion-crm-documents

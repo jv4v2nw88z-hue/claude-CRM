@@ -20,26 +20,36 @@
     "run_worker_first": ["/api/*"]
   },
 
-  // Create with:  npx wrangler d1 create midigitalexpansion-crm
-  // then paste the returned database_id over the placeholder below.
+  // Created in the ENAM region (the agency and its clients are all in Michigan).
+  // Recreate elsewhere with `npx wrangler d1 create midigitalexpansion-crm` and
+  // paste the returned id here — builds deploy what is committed, so this value
+  // has to live in the repo.
   "d1_databases": [
     {
       "binding": "DB",
       "database_name": "midigitalexpansion-crm",
-      "database_id": "REPLACE_WITH_YOUR_D1_DATABASE_ID",
+      "database_id": "c76d91ea-063a-4995-8ece-0727ca578e90",
       "migrations_dir": "migrations"
     }
   ],
 
-  // Create with:  npx wrangler r2 bucket create midigitalexpansion-crm-documents
-  // Optional — with the bucket absent the Documents tab reports uploads disabled
-  // rather than erroring, exactly as the S3 version did.
-  "r2_buckets": [
-    {
-      "binding": "DOCUMENTS",
-      "bucket_name": "midigitalexpansion-crm-documents"
-    }
-  ],
+  // File uploads are off until R2 is enabled on the account, which is a one-time
+  // opt-in in the dashboard (Storage & Databases -> R2) that needs a payment
+  // method; the API refuses bucket creation until then with error 10042. With no
+  // bucket bound the Documents tab reports uploads disabled rather than erroring,
+  // exactly as the S3 version did, so this is a feature switch rather than a
+  // broken state. To turn uploads on:
+  //
+  //   npx wrangler r2 bucket create midigitalexpansion-crm-documents
+  //
+  // then uncomment the block below and redeploy.
+  //
+  // "r2_buckets": [
+  //   {
+  //     "binding": "DOCUMENTS",
+  //     "bucket_name": "midigitalexpansion-crm-documents"
+  //   }
+  // ],
 
   // Cron triggers fire in UTC. 10:00 UTC is 06:00 Eastern during EDT, which is
   // the 6am the automation engine was always specified to run at.

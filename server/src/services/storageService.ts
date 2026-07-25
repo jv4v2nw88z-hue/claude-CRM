@@ -1,4 +1,4 @@
-import { isStorageEnabled, r2PublicBaseUrl } from "../config/env";
+import { documentsBucket, r2PublicBaseUrl } from "../config/env";
 import { HttpError } from "../lib/http";
 
 /**
@@ -12,13 +12,14 @@ import { HttpError } from "../lib/http";
  */
 
 function bucket(env: Env): R2Bucket {
-  if (!isStorageEnabled(env)) {
+  const documents = documentsBucket(env);
+  if (!documents) {
     throw new HttpError(
       503,
       "File storage is not configured. Bind an R2 bucket as DOCUMENTS in wrangler.jsonc to enable uploads."
     );
   }
-  return env.DOCUMENTS;
+  return documents;
 }
 
 export function buildKey(clientId: string, fileName: string): string {
@@ -57,4 +58,4 @@ export function publicUrlFor(env: Env, key: string): string | null {
   return `${base.replace(/\/$/, "")}/${key}`;
 }
 
-export { isStorageEnabled };
+export { isStorageEnabled } from "../config/env";
