@@ -29,34 +29,62 @@ export interface SeedResult {
   usersSeeded: boolean;
   rulesSeeded: number;
   clientsSeeded: number;
+  /**
+   * Generated passwords, returned exactly once — on the run that created the
+   * account. Re-running the seed does not reissue them, because upsert leaves an
+   * existing user untouched. If they're lost, the recovery path is a reset, not
+   * another seed.
+   */
+  credentials: Array<{ email: string; password: string }>;
   message: string;
 }
 
+/**
+ * A generated first password.
+ *
+ * The old default was the literal string `changeme123`, identical for both
+ * accounts and printed in the README — which meant anyone who could read the
+ * repository could sign in to production, and the instruction to change it
+ * pointed at a feature that did not exist. Each account now gets its own random
+ * secret, shown once, with `mustChangePassword` forcing a reset on first use.
+ */
+function generatePassword(): string {
+  // Ambiguous glyphs removed: this gets read off a screen and typed on a phone.
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
+  const bytes = crypto.getRandomValues(new Uint8Array(20));
+  return Array.from(bytes, (b) => alphabet[b % alphabet.length]).join("");
+}
+
 export async function runSeed(prisma: PrismaClient, env: Env): Promise<SeedResult> {
-  const defaultPassword = env.SEED_PASSWORD || "changeme123";
-  const passwordHash = await hashPassword(defaultPassword);
+  const credentials: Array<{ email: string; password: string }> = [];
 
-  const brian = await prisma.user.upsert({
-    where: { email: "brian@midigitalexpansion.com" },
-    update: {},
-    create: {
-      name: "Brian",
-      email: "brian@midigitalexpansion.com",
-      passwordHash,
-      role: "TECHNICAL",
-    },
-  });
+  /**
+   * `update: {}` is load-bearing — re-running the seed must never reset a
+   * password someone has already changed. Only a create issues a credential,
+   * which is why `credentials` is empty on every subsequent run.
+   */
+  async function upsertUser(name: string, email: string, role: string) {
+    const existing = await prisma.user.findUnique({ where: { email } });
+    if (existing) return existing;
 
-  const cole = await prisma.user.upsert({
-    where: { email: "cole@midigitalexpansion.com" },
-    update: {},
-    create: {
-      name: "Cole",
-      email: "cole@midigitalexpansion.com",
-      passwordHash,
-      role: "SALES",
-    },
-  });
+    // SEED_PASSWORD stays supported so local development can pin a known value;
+    // it is deliberately not defaulted.
+    const password = env.SEED_PASSWORD || generatePassword();
+    const user = await prisma.user.create({
+      data: {
+        name,
+        email,
+        passwordHash: await hashPassword(password),
+        role,
+        mustChangePassword: true,
+      },
+    });
+    credentials.push({ email, password });
+    return user;
+  }
+
+  const brian = await upsertUser("Brian", "brian@midigitalexpansion.com", "TECHNICAL");
+  const cole = await upsertUser("Cole", "cole@midigitalexpansion.com", "SALES");
 
   const rulesSeeded = await seedAutomationRules(prisma);
 
@@ -66,7 +94,12 @@ export async function runSeed(prisma: PrismaClient, env: Env): Promise<SeedResul
       usersSeeded: true,
       rulesSeeded,
       clientsSeeded: 0,
-      message: `${existingClients} client(s) already present, left client data alone.`,
+      credentials,
+      message:
+        `${existingClients} client(s) already present, left client data alone.` +
+        (credentials.length > 0
+          ? ` New user account(s) were created — the passwords below are shown once.`
+          : ""),
     };
   }
 
@@ -427,10 +460,14 @@ export async function runSeed(prisma: PrismaClient, env: Env): Promise<SeedResul
     usersSeeded: true,
     rulesSeeded,
     clientsSeeded: 5,
+    credentials,
     message:
-      `Seeded 5 clients, 3 deals and 2 users. ` +
-      `Log in as brian@midigitalexpansion.com or cole@midigitalexpansion.com ` +
-      `with the seed password — change it after first login.`,
+      credentials.length > 0
+        ? `Seeded 5 clients, 3 deals and ${credentials.length} user(s). ` +
+          `The generated passwords below are shown once and are not recoverable — ` +
+          `save them now. Each account must set a new password on first sign-in.`
+        : `Seeded 5 clients and 3 deals. Users already existed, so no passwords were ` +
+          `issued or reset.`,
   };
 }
 

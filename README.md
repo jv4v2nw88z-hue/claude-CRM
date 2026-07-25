@@ -93,7 +93,15 @@ Then open the Worker's URL and log in:
 | Brian | `brian@midigitalexpansion.com` | Technical |
 | Cole | `cole@midigitalexpansion.com` | Sales |
 
-Password: `changeme123` (override with a `SEED_PASSWORD` secret). **Change it after first login.**
+The seed generates a **random password per account** and prints it once, on the
+run that created it. Save it then — it is hashed immediately and is not
+recoverable afterwards; a lost one is replaced by re-seeding into an empty
+database, not by looking it up. Both accounts are created with
+`mustChangePassword` set, so the first sign-in goes straight to a reset screen
+and nothing else in the app renders until a new password is chosen.
+
+There is deliberately no default password. The previous one was identical on both
+accounts and printed here, which meant repository access was production access.
 
 The 6am automation job needs no further setup — `triggers.crons` in `wrangler.jsonc` registers it on deploy.
 
@@ -358,7 +366,7 @@ Plaintext settings live in `vars` in `wrangler.jsonc`; secrets are set with `npx
 |---|---|---|
 | `JWT_SECRET` | secret | Session signing key, 16+ chars (**required**) |
 | `SEED_SECRET` | secret | Guards `POST /api/internal/seed` |
-| `SEED_PASSWORD` | secret | Password for the seeded users (default `changeme123`) |
+| `SEED_PASSWORD` | secret | Pins the seeded first password (local dev only; 12+ chars). Unset in production so the seed generates one per user |
 | `AUTOMATION_SECRET` | secret | Guards `POST /api/internal/run-automation` |
 | `RESEND_API_KEY` | secret | Task notification emails |
 | `QA_HOOKS_ENABLED` | secret | Mounts the QA hooks. **Development only** |
@@ -369,6 +377,18 @@ Plaintext settings live in `vars` in `wrangler.jsonc`; secrets are set with `npx
 | `DB` | binding | D1 database |
 | `DOCUMENTS` | binding | R2 bucket |
 | `ASSETS` | binding | The built React app |
+
+### Offboarding
+
+Session tokens are stateless, so access is withdrawn by invalidating them, not by
+deleting a cookie. Three steps, in order:
+
+1. **Bump the user's `tokenVersion`** — `UPDATE User SET tokenVersion = tokenVersion + 1 WHERE email = '…'`. Every token they hold stops working on the next request.
+2. **Disable the account** — reset `passwordHash` to a random value and set `mustChangePassword`, so it cannot be signed back into.
+3. **Rotate any shared secrets they had** — `JWT_SECRET`, `SEED_SECRET`, `AUTOMATION_SECRET`. Rotating `JWT_SECRET` signs *everyone* out, which is the intended blast radius if you suspect a token was taken.
+
+Step 1 alone is enough for a routine departure; do all three if a laptop is lost
+or you think a token leaked.
 
 ### Backups
 

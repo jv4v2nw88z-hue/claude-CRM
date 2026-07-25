@@ -73,6 +73,23 @@ export const loginSchema = z.object({
   password: z.string().min(1),
 });
 
+/**
+ * Minimum length is the only strength rule.
+ *
+ * Composition requirements (a digit, a symbol, mixed case) reliably push people
+ * towards `Password1!` and no further; length is the property that actually
+ * costs an attacker anything. Twelve is the audit's figure and NIST's floor for
+ * a secret with no other factor behind it.
+ */
+export const PASSWORD_MIN_LENGTH = 12;
+
+export const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1, "Enter your current password"),
+  newPassword: z
+    .string()
+    .min(PASSWORD_MIN_LENGTH, `Use at least ${PASSWORD_MIN_LENGTH} characters`),
+});
+
 // ---------------------------
 // Clients
 // ---------------------------

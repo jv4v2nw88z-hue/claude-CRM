@@ -13,8 +13,10 @@ AUTOMATION_SECRET="dev-automation-secret"
 # Optional. Guards POST /api/internal/seed.
 SEED_SECRET="dev-seed-secret"
 
-# Optional. Password given to the two seeded users. Change after first login.
-SEED_PASSWORD="changeme123"
+# Optional. Pins the seeded users' first password for local development only.
+# Must be 12+ characters (see PASSWORD_MIN_LENGTH). With this unset, the seed
+# generates a random password per user and prints it once.
+SEED_PASSWORD="local-dev-password"
 
 # Optional. With no key set, notification emails log to the console instead.
 RESEND_API_KEY=""

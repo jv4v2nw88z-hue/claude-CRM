@@ -42,6 +42,22 @@ model User {
   role         String
   createdAt    DateTime @default(now())
 
+  /// Bumped on logout and password change; embedded in the JWT and compared on
+  /// every request. A stateless token can't be revoked, so this is what makes
+  /// "log out everywhere" and offboarding actually cut off access.
+  tokenVersion Int @default(0)
+
+  /// Seeded users start with a generated password they must replace. Defaults to
+  /// true so any account created before this column existed is also forced
+  /// through a reset rather than silently keeping a known password.
+  mustChangePassword Boolean @default(true)
+
+  /// Per-account brute-force lockout. Counts consecutive failures; cleared on any
+  /// successful login. `lockedUntil` in the future rejects before hashing, which
+  /// also stops login being used as a CPU-exhaustion lever.
+  failedLoginCount Int       @default(0)
+  lockedUntil      DateTime?
+
   assignedTasks       Task[]                @relation("AssignedTasks")
   createdInteractions Interaction[]
   ownedClients        Client[]              @relation("AccountOwner")

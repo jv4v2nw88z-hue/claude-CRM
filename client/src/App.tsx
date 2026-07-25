@@ -3,6 +3,7 @@ import { Navigate, Outlet, Route, Routes } from "react-router-dom";
 import { useAuth } from "./context/AuthContext";
 import { Layout } from "./components/Layout";
 import { Login } from "./pages/Login";
+import { Settings } from "./pages/Settings";
 import { Button } from "./components/ui";
 
 /**
@@ -49,6 +50,15 @@ function RequireAuth() {
   }
 
   if (!user) return <Navigate to="/login" replace />;
+
+  /*
+   * The reset gate. Rendered here rather than as a route so it cannot be
+   * navigated around: every authenticated path in the app is behind this
+   * component, so an account still on its generated password reaches nothing
+   * else — not by typing a URL, not via a stale bookmark.
+   */
+  if (user.mustChangePassword) return <Settings forced />;
+
   return <Outlet />;
 }
 
@@ -74,6 +84,7 @@ export default function App() {
               <Route path="deals" element={<Deals />} />
               <Route path="tasks" element={<Tasks />} />
               <Route path="revenue" element={<Revenue />} />
+              <Route path="settings" element={<Settings />} />
               <Route path="settings/automations" element={<AutomationSettings />} />
             </Route>
           </Route>

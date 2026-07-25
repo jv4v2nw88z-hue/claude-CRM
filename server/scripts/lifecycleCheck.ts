@@ -19,7 +19,9 @@
 
 const BASE_URL = process.env.QA_BASE_URL ?? "http://localhost:8787";
 const EMAIL = process.env.QA_EMAIL ?? "cole@midigitalexpansion.com";
-const PASSWORD = process.env.QA_PASSWORD ?? "changeme123";
+// Matches SEED_PASSWORD in .dev.vars. Must satisfy PASSWORD_MIN_LENGTH, since
+// the QA user is a real account subject to the same password rules.
+const PASSWORD = process.env.QA_PASSWORD ?? "local-dev-password";
 const BUSINESS_NAME = `QA Lifecycle ${Date.now()}`;
 
 let cookie = "";
@@ -353,6 +355,29 @@ async function main() {
   await del(`/deals/${deal.id}`);
   await del(`/qa/clients/${client.id}`);
   console.log("\nCleaned up QA data.");
+
+  /*
+   * Session revocation, asserted last because it deliberately invalidates the
+   * cookie every step above depends on.
+   *
+   * Before token versioning, logout cleared the cookie and nothing else: a token
+   * captured beforehand stayed valid for its full lifetime, so "log out" was a
+   * client-side gesture rather than a security control. This is the regression
+   * guard for that — if it ever passes a 200 again, revocation is broken.
+   */
+  console.log("\nSession revocation");
+  const revoked = cookie;
+  await post("/auth/logout", undefined);
+
+  const meAfterLogout = await fetch(`${BASE_URL}/api/auth/me`, {
+    headers: { cookie: revoked },
+  });
+  check("logout invalidates the token everywhere, not just this client", meAfterLogout.status === 401);
+
+  const dataAfterLogout = await fetch(`${BASE_URL}/api/clients`, {
+    headers: { cookie: revoked },
+  });
+  check("a revoked token cannot read client data", dataAfterLogout.status === 401);
 }
 
 main()

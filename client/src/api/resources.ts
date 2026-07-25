@@ -23,6 +23,8 @@ export const authApi = {
     api.post<{ user: User }>("/auth/login", { email, password }),
   logout: () => api.post<void>("/auth/logout"),
   me: () => api.get<{ user: User }>("/auth/me"),
+  changePassword: (currentPassword: string, newPassword: string) =>
+    api.post<{ user: User }>("/auth/change-password", { currentPassword, newPassword }),
 };
 
 export const usersApi = {

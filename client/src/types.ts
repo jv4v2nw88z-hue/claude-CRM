@@ -32,6 +32,8 @@ export interface User {
   name: string;
   email: string;
   role: UserRole;
+  /** Forces the reset gate in App.tsx before any other route renders. */
+  mustChangePassword: boolean;
 }
 
 export interface Contact {

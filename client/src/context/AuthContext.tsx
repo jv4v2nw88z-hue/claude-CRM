@@ -17,6 +17,7 @@ interface AuthContextValue {
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
+  changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -49,6 +50,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(res.user);
   }, []);
 
+  /**
+   * Replaces the user from the response rather than refetching, so the
+   * `mustChangePassword` gate in App.tsx releases in the same render the
+   * password change completes — no reload, no flash of the reset screen.
+   */
+  const changePassword = useCallback(
+    async (currentPassword: string, newPassword: string) => {
+      const res = await authApi.changePassword(currentPassword, newPassword);
+      setUser(res.user);
+    },
+    []
+  );
+
   const logout = useCallback(async () => {
     await authApi.logout().catch(() => undefined);
     setUser(null);
@@ -56,8 +70,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [queryClient]);
 
   const value = useMemo(
-    () => ({ user, isLoading, login, logout }),
-    [user, isLoading, login, logout]
+    () => ({ user, isLoading, login, logout, changePassword }),
+    [user, isLoading, login, logout, changePassword]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

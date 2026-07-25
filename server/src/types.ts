@@ -6,6 +6,8 @@ export interface AuthedUser {
   name: string;
   email: string;
   role: UserRole;
+  /** Drives the client-side gate that forces a reset before anything else renders. */
+  mustChangePassword: boolean;
 }
 
 /**

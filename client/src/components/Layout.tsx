@@ -10,6 +10,7 @@ import {
   Menu,
   Settings,
   TrendingUp,
+  UserCog,
   X,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
@@ -23,6 +24,7 @@ const NAV_ITEMS = [
   { to: "/tasks", label: "Tasks", icon: CheckSquare, end: false },
   { to: "/revenue", label: "Revenue", icon: BarChart3, end: false },
   { to: "/settings/automations", label: "Automations", icon: Settings, end: false },
+  { to: "/settings", label: "Account", icon: UserCog, end: true },
 ];
 
 export function Layout() {

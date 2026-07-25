@@ -60,8 +60,28 @@ if (!res.ok) {
   process.exit(1);
 }
 
-const result = body as { message?: string; rulesSeeded?: number; clientsSeeded?: number };
+const result = body as {
+  message?: string;
+  rulesSeeded?: number;
+  clientsSeeded?: number;
+  credentials?: Array<{ email: string; password: string }>;
+};
 console.log(`Seeding ${baseUrl}`);
 console.log(`  automation rules created: ${result.rulesSeeded ?? 0}`);
 console.log(`  clients created:          ${result.clientsSeeded ?? 0}`);
 console.log(`  ${result.message ?? "Done."}`);
+
+/**
+ * The only time these values are ever visible. They are generated inside the
+ * Worker, hashed immediately, and never stored in plaintext — so this output is
+ * not a convenience, it is the sole handoff. Printed to stdout rather than
+ * written to a file so it does not end up committed.
+ */
+if (result.credentials?.length) {
+  console.log("\n  ─── First-time sign-in — save these now, they are not recoverable ───");
+  for (const { email, password } of result.credentials) {
+    console.log(`    ${email}`);
+    console.log(`      password: ${password}`);
+  }
+  console.log("  Each account must set a new password on first sign-in.\n");
+}
