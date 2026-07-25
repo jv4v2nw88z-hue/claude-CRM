@@ -1,12 +1,21 @@
-import { Retainer, RetainerStatus, ServiceTierType } from "@prisma/client";
 import { endOfMonth, lastNMonths, monthKey, startOfMonth } from "../utils/dateHelpers";
+import type { RetainerStatus, ServiceTierType } from "../domain/enums";
 
-export type RetainerLike = Pick<
-  Retainer,
-  "monthlyAmount" | "status" | "startDate" | "endDate" | "tier" | "updatedAt"
->;
+export interface RetainerLike {
+  monthlyAmount: number;
+  status: string;
+  startDate: Date | null;
+  endDate: Date | null;
+  tier: string;
+  updatedAt: Date;
+}
 
-export function toNumber(amount: Retainer["monthlyAmount"]): number {
+/**
+ * Money is a SQLite REAL now rather than a Postgres NUMERIC, so this arrives as
+ * a plain number and no longer needs Decimal unwrapping — but every amount still
+ * goes through here so callers stay indifferent to how it is stored.
+ */
+export function toNumber(amount: number | string): number {
   return typeof amount === "number" ? amount : Number(amount);
 }
 
@@ -33,7 +42,7 @@ export function mrrByTier(retainers: RetainerLike[]): Record<string, number> {
   return byTier;
 }
 
-export function hasActiveRetainer(retainers: Pick<Retainer, "status">[]): boolean {
+export function hasActiveRetainer(retainers: { status: string }[]): boolean {
   return retainers.some((r) => r.status === "ACTIVE");
 }
 
@@ -86,19 +95,12 @@ export function mrrLostThisQuarter(retainers: RetainerLike[], now = new Date()):
     .reduce((sum, r) => sum + toNumber(r.monthlyAmount), 0);
 }
 
-export const TIER_ORDER: ServiceTierType[] = [
-  "PROSPECT",
-  "WEBSITE_BUILD",
-  "WEBSITE_LIVE",
-  "BRAND_CURATION",
-  "SOCIAL_MEDIA",
-  "ANALYTICS",
-  "CHURNED",
-];
-
 export const ALL_RETAINER_STATUSES: RetainerStatus[] = [
   "ACTIVE",
   "PAUSED",
   "CANCELLED",
   "PENDING_FIRST_PAYMENT",
 ];
+
+export type { ServiceTierType };
+export { TIER_ORDER } from "../domain/enums";

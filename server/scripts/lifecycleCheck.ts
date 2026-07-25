@@ -2,21 +2,25 @@
  * End-to-end lifecycle check (spec §12, Phase 7).
  *
  * Drives a throwaway client through the whole service ladder against a running
- * API, backdating anchor dates so every automation rule gets a chance to fire,
+ * Worker, backdating anchor dates so every automation rule gets a chance to fire,
  * and asserting MRR moves exactly when a retainer's status says it should.
  *
- * Usage: npm run qa:lifecycle   (server must be running on $QA_BASE_URL)
+ * Usage: npm run qa:lifecycle    (needs `npm run dev` running on $QA_BASE_URL)
+ *
+ * On Postgres this opened a second connection and manipulated rows directly.
+ * D1 is only reachable from inside the Worker, so everything here goes over
+ * HTTP — which means the check now exercises the real API surface. The two
+ * things the public API genuinely cannot express (backdating a tier-history row,
+ * hard deleting a client) go through the QA hooks at /api/qa, which mount only
+ * when QA_HOOKS_ENABLED=true in .dev.vars.
+ *
  * Creates and then deletes its own data — safe to run against a seeded dev DB.
  */
 
-import { PrismaClient } from "@prisma/client";
-
-const BASE_URL = process.env.QA_BASE_URL ?? "http://localhost:4000";
+const BASE_URL = process.env.QA_BASE_URL ?? "http://localhost:8787";
 const EMAIL = process.env.QA_EMAIL ?? "cole@midigitalexpansion.com";
 const PASSWORD = process.env.QA_PASSWORD ?? "changeme123";
 const BUSINESS_NAME = `QA Lifecycle ${Date.now()}`;
-
-const prisma = new PrismaClient();
 
 let cookie = "";
 let passed = 0;
@@ -36,7 +40,7 @@ async function call<T>(path: string, init: RequestInit = {}): Promise<T> {
   const res = await fetch(`${BASE_URL}/api${path}`, {
     ...init,
     headers: {
-      ...(init.body ? { "Content-Type": "application/json" } : {}),
+      ...(typeof init.body === "string" ? { "Content-Type": "application/json" } : {}),
       ...(cookie ? { Cookie: cookie } : {}),
       ...init.headers,
     },
@@ -47,7 +51,9 @@ async function call<T>(path: string, init: RequestInit = {}): Promise<T> {
 
   if (res.status === 204) return undefined as T;
   const body = await res.json();
-  if (!res.ok) throw new Error(`${init.method ?? "GET"} ${path} -> ${res.status}: ${JSON.stringify(body)}`);
+  if (!res.ok) {
+    throw new Error(`${init.method ?? "GET"} ${path} -> ${res.status}: ${JSON.stringify(body)}`);
+  }
   return body as T;
 }
 
@@ -55,6 +61,7 @@ const post = <T>(path: string, body?: unknown) =>
   call<T>(path, { method: "POST", body: body === undefined ? undefined : JSON.stringify(body) });
 const patch = <T>(path: string, body: unknown) =>
   call<T>(path, { method: "PATCH", body: JSON.stringify(body) });
+const del = <T>(path: string) => call<T>(path, { method: "DELETE" });
 
 function daysAgo(days: number): Date {
   const d = new Date();
@@ -62,36 +69,40 @@ function daysAgo(days: number): Date {
   return d;
 }
 
-/** Pushes the rule's anchor into the past so the countdown has already elapsed. */
-async function backdateLaunch(clientId: string, days: number) {
-  await prisma.client.update({
-    where: { id: clientId },
-    data: { websiteLaunchDate: daysAgo(days) },
-  });
+interface ClientDetail {
+  id: string;
+  currentTier: string;
+  websiteLaunchDate: string | null;
+  isActive: boolean;
+  contacts: { firstName: string }[];
+  serviceHistory: { toTier: string }[];
 }
 
-async function backdateTierEntry(clientId: string, tier: string, days: number) {
-  const entry = await prisma.serviceHistoryEntry.findFirst({
-    where: { clientId, toTier: tier as never },
-    orderBy: { changedAt: "desc" },
-  });
-  if (entry) {
-    await prisma.serviceHistoryEntry.update({
-      where: { id: entry.id },
-      data: { changedAt: daysAgo(days) },
-    });
-  }
+interface TaskRow {
+  id: string;
+  title: string;
+  status: string;
+  completedAt: string | null;
 }
 
-async function runAutomation() {
-  return post<{ tasksCreated: { title: string }[] }>("/automation-rules/run");
+const clientDetail = (id: string) => call<ClientDetail>(`/clients/${id}`);
+
+/** Pushes the launch anchor into the past through the ordinary update endpoint. */
+const backdateLaunch = (clientId: string, days: number) =>
+  patch(`/clients/${clientId}`, { websiteLaunchDate: daysAgo(days).toISOString() });
+
+/** Tier-history rows have no public write path, so this uses the QA hook. */
+const backdateTierEntry = (clientId: string, toTier: string, days: number) =>
+  post("/qa/backdate-tier-entry", { clientId, toTier, changedAt: daysAgo(days).toISOString() });
+
+const runAutomation = () => post<{ tasksCreated: { title: string }[] }>("/automation-rules/run");
+
+async function tasksFor(clientId: string, query = ""): Promise<TaskRow[]> {
+  return call<TaskRow[]>(`/tasks?clientId=${clientId}${query}`);
 }
 
 async function openTaskTitles(clientId: string): Promise<string[]> {
-  const tasks = await prisma.task.findMany({
-    where: { clientId, status: { in: ["OPEN", "IN_PROGRESS", "SNOOZED"] } },
-  });
-  return tasks.map((t) => t.title);
+  return (await tasksFor(clientId)).map((t) => t.title);
 }
 
 async function totalMrr(): Promise<number> {
@@ -127,20 +138,26 @@ async function main() {
   const client = await post<{ id: string; currentTier: string }>(`/deals/${deal.id}/convert`, {});
   check("converts the deal into a client at Website Build", client.currentTier === "WEBSITE_BUILD");
 
-  const convertedDeal = await prisma.deal.findUniqueOrThrow({ where: { id: deal.id } });
-  check("marks the deal Won and links it to the client", convertedDeal.stage === "Won" && convertedDeal.clientId === client.id);
+  const deals = await call<{ id: string; stage: string; clientId: string | null }[]>("/deals");
+  const convertedDeal = deals.find((d) => d.id === deal.id);
+  check(
+    "marks the deal Won and links it to the client",
+    convertedDeal?.stage === "Won" && convertedDeal?.clientId === client.id
+  );
 
-  const carriedContact = await prisma.contact.findFirst({ where: { clientId: client.id } });
-  check("carries the deal's contact onto the client", carriedContact?.firstName === "Jamie");
+  const afterConvert = await clientDetail(client.id);
+  check("carries the deal's contact onto the client", afterConvert.contacts[0]?.firstName === "Jamie");
 
   // --- Website launch -----------------------------------------------------
   console.log("\nTier: Website Build → Website Live");
   await patch(`/clients/${client.id}/tier`, { newTier: "WEBSITE_LIVE" });
-  const live = await prisma.client.findUniqueOrThrow({ where: { id: client.id } });
+  const live = await clientDetail(client.id);
   check("auto-populates websiteLaunchDate on going live", live.websiteLaunchDate !== null);
-
-  const history = await prisma.serviceHistoryEntry.findMany({ where: { clientId: client.id } });
-  check("writes an audit row for every tier change", history.length === 2, history.map((h) => h.toTier));
+  check(
+    "writes an audit row for every tier change",
+    live.serviceHistory.length === 2,
+    live.serviceHistory.map((h) => h.toTier)
+  );
 
   // --- Rule: pitch brand curation at 30 days ------------------------------
   console.log("\nAutomation: 30 days post-launch");
@@ -205,13 +222,14 @@ async function main() {
   // --- Tier change retires the old tier's nags ----------------------------
   console.log("\nTier: Website Live → Brand Curation");
   await patch(`/clients/${client.id}/tier`, { newTier: "BRAND_CURATION" });
-  const cancelled = await prisma.task.findMany({
-    where: { clientId: client.id, autoGenerated: true, status: "CANCELLED" },
-  });
+  const cancelled = await tasksFor(client.id, "&status=CANCELLED");
   check("cancels the stale Website Live upsell tasks", cancelled.length >= 2, cancelled.length);
 
   const survivingOpen = await openTaskTitles(client.id);
-  check("leaves no orphaned Website Live nags open", !survivingOpen.some((t) => t.startsWith("URGENT:")));
+  check(
+    "leaves no orphaned Website Live nags open",
+    !survivingOpen.some((t) => t.startsWith("URGENT:"))
+  );
 
   // --- Rule: pitch social at 45 days --------------------------------------
   console.log("\nAutomation: 45 days at Brand Curation");
@@ -238,10 +256,7 @@ async function main() {
 
   // --- Rule: quarterly check-in -------------------------------------------
   console.log("\nAutomation: quarterly check-in");
-  await prisma.retainer.update({
-    where: { id: retainer.id },
-    data: { startDate: daysAgo(91) },
-  });
+  await patch(`/retainers/${retainer.id}`, { startDate: daysAgo(91).toISOString() });
   await runAutomation();
   titles = await openTaskTitles(client.id);
   check(
@@ -254,7 +269,7 @@ async function main() {
   console.log("\nAutomation: contract renewal");
   const expiringSoon = new Date();
   expiringSoon.setDate(expiringSoon.getDate() + 10); // inside the 14-day window
-  await prisma.retainer.update({ where: { id: retainer.id }, data: { endDate: expiringSoon } });
+  await patch(`/retainers/${retainer.id}`, { endDate: expiringSoon.toISOString() });
   await runAutomation();
   titles = await openTaskTitles(client.id);
   check(
@@ -274,21 +289,27 @@ async function main() {
   console.log("\nChurn");
   await patch(`/retainers/${retainer.id}`, { status: "CANCELLED" });
   const mrrAfterChurn = await totalMrr();
-  check("a cancelled retainer leaves MRR", mrrAfterChurn === mrrBefore, { mrrAfterChurn, mrrBefore });
+  check("a cancelled retainer leaves MRR", mrrAfterChurn === mrrBefore, {
+    mrrAfterChurn,
+    mrrBefore,
+  });
 
   const revenue = await call<{ lostThisQuarter: number }>("/dashboard/revenue");
-  check("cancelled revenue shows up as lost this quarter", revenue.lostThisQuarter >= 600, revenue.lostThisQuarter);
+  check(
+    "cancelled revenue shows up as lost this quarter",
+    revenue.lostThisQuarter >= 600,
+    revenue.lostThisQuarter
+  );
 
   // --- Task completion ----------------------------------------------------
   console.log("\nTasks");
-  const anyOpen = await prisma.task.findFirst({
-    where: { clientId: client.id, status: "OPEN" },
-  });
-  if (anyOpen) {
-    const completed = await post<{ status: string; completedAt: string | null }>(
-      `/tasks/${anyOpen.id}/complete`
+  const openTasks = await tasksFor(client.id, "&status=OPEN");
+  if (openTasks.length > 0) {
+    const completed = await post<TaskRow>(`/tasks/${openTasks[0].id}/complete`);
+    check(
+      "completing a task stamps status and completedAt",
+      completed.status === "DONE" && completed.completedAt !== null
     );
-    check("completing a task stamps status and completedAt", completed.status === "DONE" && completed.completedAt !== null);
   }
 
   // --- Interactions -------------------------------------------------------
@@ -298,16 +319,39 @@ async function main() {
   );
   check("logs an interaction against the signed-in user", interaction.loggedById === login.user.id);
 
+  // --- Documents ----------------------------------------------------------
+  const storage = await call<{ storageEnabled: boolean }>("/documents/config");
+  if (storage.storageEnabled) {
+    const form = new FormData();
+    form.append("file", new File(["QA contract body"], "qa-contract.txt", { type: "text/plain" }));
+    form.append("category", "contract");
+    const uploaded = await call<{ id: string; storageKey: string | null }>(
+      `/clients/${client.id}/documents`,
+      { method: "POST", body: form }
+    );
+    check("uploads a document into R2", Boolean(uploaded.storageKey));
+
+    const fetched = await fetch(`${BASE_URL}/api/documents/${uploaded.id}/content`, {
+      headers: { Cookie: cookie },
+    });
+    check("reads the document back out of R2", (await fetched.text()) === "QA contract body");
+
+    await del(`/documents/${uploaded.id}`);
+  }
+
   // --- Soft delete --------------------------------------------------------
-  await call(`/clients/${client.id}`, { method: "DELETE" });
+  await del(`/clients/${client.id}`);
   const roster = await call<{ id: string }[]>("/clients");
-  check("deleting a client removes it from the roster but keeps the row", !roster.some((c) => c.id === client.id));
-  const stillThere = await prisma.client.findUnique({ where: { id: client.id } });
-  check("the client row survives as an inactive record", stillThere !== null && stillThere.isActive === false);
+  check(
+    "deleting a client removes it from the roster but keeps the row",
+    !roster.some((c) => c.id === client.id)
+  );
+  const stillThere = await clientDetail(client.id);
+  check("the client row survives as an inactive record", stillThere.isActive === false);
 
   // --- Cleanup ------------------------------------------------------------
-  await prisma.deal.deleteMany({ where: { id: deal.id } });
-  await prisma.client.delete({ where: { id: client.id } });
+  await del(`/deals/${deal.id}`);
+  await del(`/qa/clients/${client.id}`);
   console.log("\nCleaned up QA data.");
 }
 
@@ -323,5 +367,4 @@ main()
   .catch((err) => {
     console.error("\nLifecycle check crashed:", err);
     process.exitCode = 1;
-  })
-  .finally(() => prisma.$disconnect());
+  });

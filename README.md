@@ -8,6 +8,8 @@ Website Build → Brand Curation → Social Media Management → Analytics
 
 The website build is the foot in the door; the business is the **$500–$1,000/month retainer** that should follow it. The single biggest risk is a client getting a site delivered and then falling through the cracks. **Everything in this app exists to make ladder progression and MRR impossible to forget.**
 
+It runs entirely on Cloudflare — one Worker, no other infrastructure.
+
 ---
 
 ## Stack
@@ -16,46 +18,105 @@ The website build is the foot in the door; the business is the **$500–$1,000/m
 |---|---|
 | Frontend | React 18 + Vite + TypeScript + Tailwind + TanStack Query + React Router 6 |
 | Charts / icons / DnD | recharts, lucide-react, @dnd-kit/core |
-| Backend | Node + Express + TypeScript |
-| ORM / DB | Prisma + PostgreSQL |
-| Auth | JWT in an httpOnly cookie (bcrypt password hashes) |
-| Automation | node-cron, daily at 6am |
-| Email | Resend (optional — logs to console when unconfigured) |
-| File storage | S3-compatible / Cloudflare R2 via presigned URLs (optional) |
+| Hosting | A single **Cloudflare Worker** serving both the API and the React build |
+| API | Hono |
+| Database | **Cloudflare D1** (SQLite) via Prisma 7 + `@prisma/adapter-d1` |
+| Auth | JWT in an httpOnly cookie, signed with WebCrypto; PBKDF2-SHA256 password hashes |
+| Automation | **Cloudflare Cron Triggers**, daily at 06:00 Eastern |
+| File storage | **Cloudflare R2**, bound directly to the Worker (optional) |
+| Email | Resend over `fetch` (optional — logs to console when unconfigured) |
+
+Because one Worker serves the app *and* the API, the session cookie is first-party and there is no CORS in the normal path.
 
 ---
 
-## Getting started
+## Deploying to Cloudflare
 
-Requires Node 20+ and a PostgreSQL 14+ instance.
+You need a Cloudflare account on the **Workers Paid plan ($5/month)** — see [Why the Paid plan](#why-the-paid-plan) below.
 
 ```bash
-# 1. Install
 npm run install:all
-
-# 2. Configure the backend
-cp server/.env.example server/.env
-#    Set DATABASE_URL and a long random JWT_SECRET.
-
-# 3. Create the schema and seed it
-npm run migrate
-npm run seed
-
-# 4. Run both processes (two terminals)
-npm run dev:server     # http://localhost:4000
-npm run dev:client     # http://localhost:5173
+npx wrangler login
 ```
 
-Seeded logins (**change the password after first login**):
+**1. Create the database** and paste the id it prints into `d1_databases[0].database_id` in `server/wrangler.jsonc`:
+
+```bash
+cd server
+npx wrangler d1 create midigitalexpansion-crm
+```
+
+**2. Create the documents bucket** (skip it if you don't want file uploads — delete the `r2_buckets` block instead and the Documents tab will report uploads disabled):
+
+```bash
+npx wrangler r2 bucket create midigitalexpansion-crm-documents
+```
+
+**3. Set the secrets.** Only `JWT_SECRET` is required:
+
+```bash
+npx wrangler secret put JWT_SECRET        # 16+ chars: openssl rand -hex 32
+npx wrangler secret put SEED_SECRET       # lets you run the one-time seed
+npx wrangler secret put AUTOMATION_SECRET # optional: fire the engine by hand
+npx wrangler secret put RESEND_API_KEY    # optional: notification emails
+```
+
+**4. Create the schema, then deploy:**
+
+```bash
+cd ..
+npm run migrate:remote
+npm run deploy
+```
+
+**5. Seed** the two users, six automation rules and the five founding clients (safe to re-run — it never duplicates):
+
+```bash
+CRM_URL=https://midigitalexpansion-crm.<your-subdomain>.workers.dev \
+SEED_SECRET=<the value from step 3> \
+npm run seed:remote
+```
+
+Then open the Worker's URL and log in:
 
 | User | Email | Role |
 |---|---|---|
 | Brian | `brian@midigitalexpansion.com` | Technical |
 | Cole | `cole@midigitalexpansion.com` | Sales |
 
-Password: `changeme123` (override with `SEED_PASSWORD`).
+Password: `changeme123` (override with a `SEED_PASSWORD` secret). **Change it after first login.**
 
-The seed also loads the five current clients — Sunrise Cafe, Hamilton Landscape Supply, Royal Kicks, Pennfield Pizza, Glass Family Dental — with the history that makes the dashboard truthful on day one, including Sunrise Cafe sitting at Website Live with no retainer.
+The 6am automation job needs no further setup — `triggers.crons` in `wrangler.jsonc` registers it on deploy.
+
+### Optional: a custom domain
+
+Add a route to `wrangler.jsonc` and redeploy:
+
+```jsonc
+"routes": [{ "pattern": "crm.midigitalexpansion.com", "custom_domain": true }]
+```
+
+### Optional: serve documents straight from R2
+
+By default documents stream back through the Worker, so they stay behind the session cookie. If you'd rather serve them from the bucket directly, give it a public domain and set `R2_PUBLIC_BASE_URL` in `vars` — but note that makes every uploaded document readable by anyone with the URL.
+
+---
+
+## Running it locally
+
+```bash
+npm run install:all
+cp server/.dev.vars.example server/.dev.vars   # local secrets, gitignored
+
+npm run migrate:local                          # creates the local D1 file
+npm run dev:server                             # Worker on :8787
+npm run seed:local                             # in another terminal
+npm run dev:client                             # Vite on :5173, proxying /api
+```
+
+Use `http://localhost:5173` for hot reload while working on the frontend, or `http://localhost:8787` to exercise exactly what production serves.
+
+Nothing touches your Cloudflare account until you deploy: `wrangler dev` runs D1 and R2 on disk under `server/.wrangler/`.
 
 ---
 
@@ -63,14 +124,22 @@ The seed also loads the five current clients — Sunrise Cafe, Hamilton Landscap
 
 ```
 server/
-  prisma/schema.prisma       data model + migrations
-  prisma/seed.ts             users, clients, automation rules
-  scripts/lifecycleCheck.ts  end-to-end smoke test (29 assertions)
-  src/config/                env validation, Prisma client
-  src/middleware/            requireAuth, error handling
+  wrangler.jsonc             bindings, cron schedule, static assets
+  prisma/schema.prisma       data model
+  prisma.config.ts           CLI-only config (the Worker uses the D1 binding)
+  migrations/                plain .sql, applied by wrangler
+  scripts/makeMigration.ts   schema diff -> the next migration file
+  scripts/seed.ts            triggers the in-Worker seed over HTTP
+  scripts/lifecycleCheck.ts  end-to-end smoke test (31 assertions)
+  src/index.ts               Worker entry: fetch + scheduled
+  src/app.ts                 Hono app, route mounting, auth wall
+  src/domain/enums.ts        the enums SQLite can't hold
+  src/config/                env accessors, per-request Prisma client
+  src/lib/                   password hashing, JWT, error mapping
   src/routes/                one router per resource
-  src/services/              tier changes, MRR math, dashboard, email, storage
+  src/services/              tier changes, MRR math, dashboard, email, R2
   src/jobs/automationEngine  the daily rule engine
+  src/seed/seedData.ts       users, rules, the five founding clients
 client/
   src/pages/                 Dashboard, Clients, ClientDetail, Deals, Tasks, Revenue, Automations, Login
   src/components/            StatCard, TierBadge, AtRiskPanel, TaskChecklist, kanban, slide-overs…
@@ -89,10 +158,10 @@ A client at `WEBSITE_LIVE` for **45+ days with no ACTIVE retainer** is at risk. 
 MRR is the sum of **ACTIVE** retainers only. `PENDING_FIRST_PAYMENT` is reported separately as pending, and paused or cancelled retainers drop out immediately — a lapsed retainer can never silently inflate the headline number. The 6-month trend reconstructs each month from retainer start/end dates rather than snapshotting, so history stays correct when a record is edited after the fact.
 
 ### Tier changes
-`PATCH /api/clients/:id/tier` is the only path allowed to change `currentTier`. In one transaction it writes a `ServiceHistoryEntry`, backfills `websiteLaunchDate` the first time a site goes live, and cancels the open auto-tasks belonging to the tier just left. Recurring check-ins and renewal reminders deliberately survive a tier change.
+`PATCH /api/clients/:id/tier` is the only path allowed to change `currentTier`. It writes a `ServiceHistoryEntry`, backfills `websiteLaunchDate` the first time a site goes live, and cancels the open auto-tasks belonging to the tier just left. Recurring check-ins and renewal reminders deliberately survive a tier change.
 
 ### Automation engine
-Runs daily at 6am (`AUTOMATION_CRON`). For every active client × every active rule it works out the anchor date, and creates a task once the countdown has elapsed — unless that rule already has a live task for that client, which makes re-runs idempotent.
+Runs daily on a Cron Trigger. For every active client × every active rule it works out the anchor date, and creates a task once the countdown has elapsed — unless that rule already has a live task for that client, which makes re-runs idempotent.
 
 Seeded rules:
 
@@ -112,38 +181,83 @@ The spec's `AutomationRule` model covers the four tier-based rules but can't exp
 
 ---
 
+## What the Cloudflare platform decides for you
+
+These are the places where running on Workers/D1 changed a design decision, not just the deployment target.
+
+**D1 has no transactions.** This is the significant one. D1 doesn't support them, and Prisma's D1 adapter quietly downgrades `$transaction` to a sequence of individual queries ([details](https://pris.ly/d/d1-transactions)). The Postgres build wrapped tier changes, contact-primary swaps and deal conversion in real transactions; those are now *ordered by failure consequence* instead, so every partial outcome is visible in the UI and self-corrects rather than rotting silently. A tier change can never end up with a changed `currentTier` and no audit row — the one combination that would break the automation engine's anchors. Each affected write path carries a comment explaining its ordering.
+
+**No enums, no `Decimal`.** SQLite has neither. Enum columns are `String`, with the allowed values in `src/domain/enums.ts` and enforced by Zod on every write; money is `Float`, which is exact for the whole-dollar monthly amounts this app deals in.
+
+**No presigned upload URLs.** A bound R2 bucket is reached by capability, not by S3 credentials, so there is nothing to sign with. Uploads are one multipart request through the Worker — which also removed both AWS SDK packages and made a half-finished upload impossible, since the object and the row now land together.
+
+**bcrypt is gone.** It can't run in a Worker's CPU budget. Passwords use PBKDF2-SHA256 via WebCrypto, with the iteration count stored inside each hash so it can be raised later without invalidating existing ones.
+
+**The cron lives outside the process.** There's no long-running process for `node-cron` to keep a timer in, so the schedule is `triggers.crons` in `wrangler.jsonc` and arrives as a `scheduled` event. Cron Triggers fire in **UTC**: `0 10 * * *` is 6am Eastern during EDT and drifts to 5am when Michigan returns to EST. Adjust it if that matters.
+
+### Why the Paid plan
+
+The Free plan caps CPU at 10 ms per invocation. Password hashing deliberately costs ~25–30 ms, so **logins fail on the Free plan**. Every other request in the app is far below the limit; this is the only reason the $5/month plan is needed. To stay on Free instead, lower `ITERATIONS` in `src/lib/password.ts` — the trade-off is spelled out there.
+
+Nothing else costs anything at this scale: D1's free allowance (5 GB, 5M row reads/day) and R2's (10 GB) are far beyond a two-person agency's needs.
+
+---
+
 ## Verification
 
 ```bash
 npm run typecheck        # server + client
-npm run build            # compiles both
-npm run qa:lifecycle     # end-to-end, needs the server running
+npm run build            # client bundle + Worker bundle
+npm run qa:lifecycle     # end-to-end, needs `npm run dev:server` running
 ```
 
-`qa:lifecycle` drives a throwaway client through the entire ladder — deal → convert → Website Build → Live → Brand → Social → Analytics → churn — backdating anchors so every automation rule fires, and asserting MRR moves exactly when retainer status says it should. It cleans up after itself.
+`qa:lifecycle` drives a throwaway client through the entire ladder — deal → convert → Website Build → Live → Brand → Social → Analytics → churn — backdating anchors so every automation rule fires, asserting MRR moves exactly when retainer status says it should, and round-tripping a document through R2. It cleans up after itself.
+
+It runs entirely over HTTP against the real API. The two operations the public API genuinely cannot express (backdating a tier-history row, hard-deleting a client) go through QA-only hooks at `/api/qa`, which mount **only** when `QA_HOOKS_ENABLED=true` — set in `.dev.vars`, never in production.
+
+---
+
+## Changing the schema
+
+```bash
+npm run migrate:new -- add_client_tags   # writes migrations/000N_add_client_tags.sql
+npm run migrate:local                    # try it locally
+npm run migrate:remote                   # then apply it for real
+```
+
+`prisma migrate dev` can't be used — it wants to connect to the database, and D1 only accepts connections from a Worker. `migrate:new` replays the existing migrations into a scratch SQLite file, diffs your schema against it, and writes the difference out as the next numbered `.sql` for wrangler to apply. Review the SQL before applying it.
 
 ---
 
 ## Configuration
 
-Everything beyond `DATABASE_URL` and `JWT_SECRET` is optional and degrades gracefully: with no `RESEND_API_KEY` notification emails log to the console, and with no S3 credentials the Documents tab explains that uploads are disabled rather than erroring.
+Everything except `JWT_SECRET` is optional and degrades gracefully: with no `RESEND_API_KEY` notification emails log to the console, and with no R2 bucket bound the Documents tab explains that uploads are disabled rather than erroring.
 
-| Variable | Purpose |
-|---|---|
-| `DATABASE_URL` | PostgreSQL connection string (**required**) |
-| `JWT_SECRET` | Session signing key, 16+ chars (**required**) |
-| `CORS_ORIGIN` | Comma-separated allowed frontend origins |
-| `AUTOMATION_CRON` | Cron expression for the engine (default `0 6 * * *`) |
-| `DISABLE_CRON` | Set `true` to turn the in-process job off |
-| `AUTOMATION_SECRET` | Shared secret for `POST /api/internal/run-automation` |
-| `RESEND_API_KEY` / `MAIL_FROM` | Task notification emails |
-| `S3_BUCKET` / `S3_REGION` / `S3_ENDPOINT` / `S3_ACCESS_KEY` / `S3_SECRET_KEY` / `S3_PUBLIC_BASE_URL` | Document storage (set `S3_ENDPOINT` for Cloudflare R2) |
+Plaintext settings live in `vars` in `server/wrangler.jsonc`; secrets are set with `npx wrangler secret put NAME`, and for local development in `server/.dev.vars`.
 
----
+| Name | Kind | Purpose |
+|---|---|---|
+| `JWT_SECRET` | secret | Session signing key, 16+ chars (**required**) |
+| `SEED_SECRET` | secret | Guards `POST /api/internal/seed` |
+| `SEED_PASSWORD` | secret | Password for the seeded users (default `changeme123`) |
+| `AUTOMATION_SECRET` | secret | Guards `POST /api/internal/run-automation` |
+| `RESEND_API_KEY` | secret | Task notification emails |
+| `QA_HOOKS_ENABLED` | secret | Mounts the QA hooks. **Development only** |
+| `APP_ENV` | var | `production` marks the session cookie `Secure` |
+| `MAIL_FROM` | var | From address on notification emails |
+| `R2_PUBLIC_BASE_URL` | var | Public bucket domain; blank streams via the Worker |
+| `CORS_ORIGIN` | var | Only needed if the frontend is hosted off-Worker |
+| `DB` | binding | D1 database |
+| `DOCUMENTS` | binding | R2 bucket |
+| `ASSETS` | binding | The built React app |
 
-## Deploying
+### Backups
 
-1. **Database** — provision Postgres, then `npm run prisma:deploy --prefix server` and `npm run seed --prefix server` once.
-2. **Backend** — deploy `server/` as a Node service. The cron job runs in-process; if the host sleeps the service, leave `DISABLE_CRON=true`, set `AUTOMATION_SECRET`, and point an external cron at `POST /api/internal/run-automation` with an `x-automation-secret` header.
-3. **Frontend** — deploy `client/` as a static build with `VITE_API_BASE_URL` set to the API origin, and add that origin to the backend's `CORS_ORIGIN`. Cookies are `SameSite=None; Secure` in production, so both sides must be HTTPS.
-4. **Backups** — enable automatic daily Postgres backups. This database is the only record of every client relationship the business has.
+D1 keeps point-in-time recovery for the last 30 days, but keep an export off-platform too:
+
+```bash
+npx wrangler d1 time-travel restore midigitalexpansion-crm --timestamp=<unix-seconds>
+npx wrangler d1 export midigitalexpansion-crm --remote --output=backup.sql
+```
+
+This database is the only record of every client relationship the business has. Take the export on a schedule.

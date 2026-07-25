@@ -1,81 +1,32 @@
-// MiDigitalExpansion CRM — data model
+// MiDigitalExpansion CRM — data model (Cloudflare D1 / SQLite)
 //
 // Design note: the whole point of this schema is to make ladder progression and
 // MRR impossible to forget. `Client.currentTier` + `ServiceHistoryEntry` give a
 // live snapshot and an audit trail; `Client.websiteLaunchDate` is the anchor the
 // automation engine uses to fire upsell reminders; `Retainer` is deliberately
 // separate from `currentTier` so a lapsed retainer can never silently inflate MRR.
+//
+// D1 note: SQLite has no native enum type, so every field that was a Postgres
+// enum is a String here. The allowed values live in `src/domain/enums.ts` as
+// const objects + string-union types, and every write path is validated by Zod
+// (`src/utils/validation.ts`) before it reaches the database — so the set of
+// legal values is still enforced, just one layer up. Money is Float rather than
+// Decimal for the same reason (SQLite has no fixed-point type); every amount in
+// this app is a whole-dollar monthly figure well inside exact float range.
 
 generator client {
-  provider = "prisma-client-js"
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+  runtime  = "workerd"
 }
 
+// No `url` here by design: in Prisma 7 the connection is supplied by the driver
+// adapter, and this app's only adapter is `PrismaD1` wrapping the Worker's D1
+// binding. The CLI never needs a connection string either — migrations are
+// generated with `prisma migrate diff` (schema-to-SQL, no database involved)
+// and applied by `wrangler d1 migrations apply`.
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
-}
-
-// ---------------------------
-// ENUMS
-// ---------------------------
-
-enum ServiceTierType {
-  PROSPECT // not yet a client
-  WEBSITE_BUILD // actively building the site
-  WEBSITE_LIVE // site shipped, no retainer yet -- DANGER ZONE, biggest revenue leak
-  BRAND_CURATION // subscribed to brand tier
-  SOCIAL_MEDIA // subscribed to social tier (includes brand)
-  ANALYTICS // full ladder, top tier
-  CHURNED // no longer a client
-}
-
-enum TaskStatus {
-  OPEN
-  IN_PROGRESS
-  DONE
-  SNOOZED
-  CANCELLED
-}
-
-enum TaskType {
-  MANUAL
-  AUTO_UPSELL_PITCH
-  AUTO_CHECK_IN
-  AUTO_INVOICE_REMINDER
-  AUTO_CONTRACT_RENEWAL
-  BUILD_MILESTONE
-}
-
-enum InteractionType {
-  CALL
-  EMAIL
-  MEETING
-  TEXT
-  SITE_VISIT
-  OTHER
-}
-
-enum RetainerStatus {
-  ACTIVE
-  PAUSED
-  CANCELLED
-  PENDING_FIRST_PAYMENT
-}
-
-enum UserRole {
-  SALES // Cole
-  TECHNICAL // Brian
-}
-
-/// Which date an automation rule counts its days from.
-/// TIER_CHANGE  -> websiteLaunchDate when the trigger tier is WEBSITE_LIVE, otherwise
-///                 the most recent ServiceHistoryEntry into the trigger tier.
-/// RETAINER_START -> the start date of the client's active retainer (recurring rules).
-/// RETAINER_END   -> a retainer's endDate; use a negative daysAfterTrigger to fire before it.
-enum RuleAnchor {
-  TIER_CHANGE
-  RETAINER_START
-  RETAINER_END
+  provider = "sqlite"
 }
 
 // ---------------------------
@@ -87,7 +38,8 @@ model User {
   name         String
   email        String   @unique
   passwordHash String
-  role         UserRole
+  /// UserRole: SALES | TECHNICAL
+  role         String
   createdAt    DateTime @default(now())
 
   assignedTasks       Task[]                @relation("AssignedTasks")
@@ -97,23 +49,25 @@ model User {
 }
 
 model Client {
-  id                String          @id @default(cuid())
-  businessName      String
-  industry          String? // e.g. "Restaurant", "Retail", "Dental", "Landscaping"
-  websiteUrl        String?
-  address           String?
-  city              String?
-  state             String?         @default("MI")
-  zip               String?
-  currentTier       ServiceTierType @default(PROSPECT)
+  id           String  @id @default(cuid())
+  businessName String
+  industry     String? // e.g. "Restaurant", "Retail", "Dental", "Landscaping"
+  websiteUrl   String?
+  address      String?
+  city         String?
+  state        String? @default("MI")
+  zip          String?
+  /// ServiceTierType
+  currentTier  String  @default("PROSPECT")
+
   accountOwnerId    String? // usually Cole
-  accountOwner      User?           @relation("AccountOwner", fields: [accountOwnerId], references: [id])
+  accountOwner      User?     @relation("AccountOwner", fields: [accountOwnerId], references: [id])
   websiteLaunchDate DateTime? // critical field -- drives the auto-upsell timer
-  notes             String?         @db.Text
+  notes             String?
   logoUrl           String?
-  isActive          Boolean         @default(true)
-  createdAt         DateTime        @default(now())
-  updatedAt         DateTime        @updatedAt
+  isActive          Boolean   @default(true)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
   contacts       Contact[]
   retainers      Retainer[]
@@ -143,45 +97,54 @@ model Contact {
 }
 
 model Retainer {
-  id            String          @id @default(cuid())
-  clientId      String
-  client        Client          @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  tier          ServiceTierType // which service this retainer covers
-  monthlyAmount Decimal         @db.Decimal(10, 2)
-  status        RetainerStatus  @default(PENDING_FIRST_PAYMENT)
+  id       String @id @default(cuid())
+  clientId String
+  client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  /// ServiceTierType — which service this retainer covers
+  tier     String
+
+  monthlyAmount Float
+  /// RetainerStatus
+  status        String    @default("PENDING_FIRST_PAYMENT")
   startDate     DateTime?
   endDate       DateTime?
   billingDay    Int? // day of month invoice goes out, 1-28
   notes         String?
-  createdAt     DateTime        @default(now())
-  updatedAt     DateTime        @updatedAt
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   @@index([clientId])
   @@index([status])
 }
 
 model ServiceHistoryEntry {
-  id          String           @id @default(cuid())
-  clientId    String
-  client      Client           @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  fromTier    ServiceTierType?
-  toTier      ServiceTierType
-  changedAt   DateTime         @default(now())
+  id       String @id @default(cuid())
+  clientId String
+  client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  /// ServiceTierType — null for the very first entry
+  fromTier String?
+  /// ServiceTierType
+  toTier   String
+
+  changedAt   DateTime @default(now())
   changedById String?
-  changedBy   User?            @relation("TierChangedBy", fields: [changedById], references: [id])
+  changedBy   User?    @relation("TierChangedBy", fields: [changedById], references: [id])
   note        String?
 
   @@index([clientId, toTier, changedAt])
 }
 
 model Task {
-  id            String          @id @default(cuid())
-  clientId      String?
-  client        Client?         @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  title         String
-  description   String?         @db.Text
-  type          TaskType        @default(MANUAL)
-  status        TaskStatus      @default(OPEN)
+  id          String  @id @default(cuid())
+  clientId    String?
+  client      Client? @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  title       String
+  description String?
+  /// TaskType
+  type        String  @default("MANUAL")
+  /// TaskStatus
+  status      String  @default("OPEN")
+
   dueDate       DateTime?
   assignedToId  String?
   assignedTo    User?           @relation("AssignedTasks", fields: [assignedToId], references: [id])
@@ -195,18 +158,21 @@ model Task {
   @@index([clientId])
   @@index([assignedToId, status])
   @@index([sourceRuleId])
+  @@index([status, dueDate])
 }
 
 model Interaction {
-  id         String          @id @default(cuid())
-  clientId   String
-  client     Client          @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  type       InteractionType
-  summary    String          @db.Text
-  occurredAt DateTime        @default(now())
+  id       String @id @default(cuid())
+  clientId String
+  client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  /// InteractionType
+  type     String
+
+  summary    String
+  occurredAt DateTime @default(now())
   loggedById String?
-  loggedBy   User?           @relation(fields: [loggedById], references: [id])
-  createdAt  DateTime        @default(now())
+  loggedBy   User?    @relation(fields: [loggedById], references: [id])
+  createdAt  DateTime @default(now())
 
   @@index([clientId, occurredAt])
 }
@@ -220,8 +186,8 @@ model Deal {
   contactPhone   String?
   source         String? // "referral", "cold outreach", "instagram DM", etc.
   stage          String   @default("New") // New, Contacted, Quoted, Won, Lost
-  estimatedValue Decimal? @db.Decimal(10, 2)
-  notes          String?  @db.Text
+  estimatedValue Float?
+  notes          String?
   clientId       String? // set once converted
   client         Client?  @relation(fields: [clientId], references: [id])
   createdAt      DateTime @default(now())
@@ -229,6 +195,7 @@ model Deal {
   lostReason     String?
 
   @@index([stage])
+  @@index([clientId])
 }
 
 model Document {
@@ -236,7 +203,7 @@ model Document {
   clientId   String
   client     Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
   fileName   String
-  fileUrl    String // S3/R2 object key or URL
+  fileUrl    String // R2 object key, or a public URL when R2_PUBLIC_BASE_URL is set
   storageKey String?
   category   String? // "contract", "invoice", "brand asset", "screenshot"
   uploadedAt DateTime @default(now())
@@ -245,21 +212,25 @@ model Document {
 }
 
 model AutomationRule {
-  id                String           @id @default(cuid())
-  name              String // "Pitch brand curation after site launch"
-  /// null means "any tier" (used by the retainer-anchored rules)
-  triggerTier       ServiceTierType?
-  /// which date the countdown starts from
-  anchor            RuleAnchor       @default(TIER_CHANGE)
-  daysAfterTrigger  Int // e.g. 45 days after websiteLaunchDate; negative fires before a RETAINER_END anchor
+  id   String @id @default(cuid())
+  name String // "Pitch brand curation after site launch"
+  /// ServiceTierType — null means "any tier" (used by the retainer-anchored rules)
+  triggerTier String?
+  /// RuleAnchor — which date the countdown starts from
+  anchor      String  @default("TIER_CHANGE")
+
+  /// e.g. 45 days after websiteLaunchDate; negative fires before a RETAINER_END anchor
+  daysAfterTrigger Int
   /// when set, the rule re-fires this many days after the last task it generated
-  repeatEveryDays   Int?
+  repeatEveryDays  Int?
   /// only fire for clients that currently have an ACTIVE retainer
-  requiresActiveRetainer Boolean     @default(false)
+  requiresActiveRetainer Boolean @default(false)
+
   taskTitleTemplate String // "Pitch {{tier}} to {{businessName}}"
-  taskType          TaskType         @default(AUTO_UPSELL_PITCH)
-  isActive          Boolean          @default(true)
-  createdAt         DateTime         @default(now())
+  /// TaskType
+  taskType          String   @default("AUTO_UPSELL_PITCH")
+  isActive          Boolean  @default(true)
+  createdAt         DateTime @default(now())
 
   generatedTasks Task[]
 }

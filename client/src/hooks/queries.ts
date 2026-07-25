@@ -306,28 +306,11 @@ export function useUploadDocument(clientId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ file, category }: { file: File; category?: string }) => {
-      const { uploadUrl, storageKey, fileUrl } = await documentsApi.requestUploadUrl(
-        clientId,
-        file.name,
-        file.type || "application/octet-stream"
-      );
-
-      // Browser PUTs straight to R2/S3 — the API never touches the bytes.
-      const res = await fetch(uploadUrl, {
-        method: "PUT",
-        body: file,
-        headers: { "Content-Type": file.type || "application/octet-stream" },
-      });
-      if (!res.ok) throw new Error("Upload to storage failed");
-
-      return documentsApi.confirm(clientId, {
-        fileName: file.name,
-        fileUrl,
-        storageKey,
-        category: category || null,
-      });
-    },
+    // One round trip: the Worker writes the object to R2 and the row together,
+    // so a failed upload can no longer leave a document listed with nothing
+    // behind it.
+    mutationFn: ({ file, category }: { file: File; category?: string }) =>
+      documentsApi.upload(clientId, file, category || null),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.documents(clientId) });
       invalidate();

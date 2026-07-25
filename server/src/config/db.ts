@@ -1,14 +1,16 @@
-import { PrismaClient, Prisma } from "@prisma/client";
+import { PrismaD1 } from "@prisma/adapter-d1";
+import { PrismaClient } from "../generated/prisma/client";
 
-// Prisma returns Decimal columns as Decimal instances, which JSON.stringify
-// renders as a string. Every money value in this app is small and well inside
-// float range, so serialise them as plain numbers — the frontend does arithmetic
-// on MRR and should never have to parse strings.
-(Prisma.Decimal.prototype as unknown as { toJSON: () => number }).toJSON =
-  function toJSON(this: Prisma.Decimal) {
-    return this.toNumber();
-  };
+/**
+ * One Prisma client per request.
+ *
+ * Workers give each request an isolate that may or may not be reused, and a D1
+ * binding is only valid for the request it arrived on — so unlike the Node
+ * version there is no module-level singleton here. Constructing the client is
+ * cheap: Prisma 7 compiles queries in WASM with no engine process to spawn.
+ */
+export function createPrisma(db: D1Database): PrismaClient {
+  return new PrismaClient({ adapter: new PrismaD1(db) });
+}
 
-export const prisma = new PrismaClient({
-  log: process.env.NODE_ENV === "development" ? ["warn", "error"] : ["error"],
-});
+export type { PrismaClient };

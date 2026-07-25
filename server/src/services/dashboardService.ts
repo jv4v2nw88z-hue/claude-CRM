@@ -1,17 +1,12 @@
-import { prisma } from "../config/db";
+import type { PrismaClient } from "../generated/prisma/client";
+import { OPEN_TASK_STATUSES } from "../domain/enums";
 import { daysBetween, endOfWeek, startOfDay } from "../utils/dateHelpers";
-import {
-  activeMrr,
-  hasActiveRetainer,
-  mrrTrend,
-  pendingMrr,
-  toNumber,
-} from "./retainerService";
+import { activeMrr, hasActiveRetainer, mrrTrend, pendingMrr, toNumber } from "./retainerService";
 
 /** A launched site with no retainer is the single biggest revenue leak in this business. */
 export const AT_RISK_DAYS = 45;
 
-export async function getDashboardSummary(now = new Date()) {
+export async function getDashboardSummary(prisma: PrismaClient, now = new Date()) {
   const [clients, allRetainers, recentInteractions] = await Promise.all([
     prisma.client.findMany({
       where: { isActive: true },
@@ -53,16 +48,15 @@ export async function getDashboardSummary(now = new Date()) {
     }))
     .sort((a, b) => b.daysSinceLaunch - a.daysSinceLaunch);
 
-  const openStatuses = ["OPEN", "IN_PROGRESS", "SNOOZED"] as const;
   const today = startOfDay(now);
 
   const [overdueTasks, tasksThisWeek] = await Promise.all([
     prisma.task.count({
-      where: { status: { in: [...openStatuses] }, dueDate: { lt: today } },
+      where: { status: { in: OPEN_TASK_STATUSES }, dueDate: { lt: today } },
     }),
     prisma.task.count({
       where: {
-        status: { in: [...openStatuses] },
+        status: { in: OPEN_TASK_STATUSES },
         dueDate: { gte: today, lte: endOfWeek(now) },
       },
     }),
@@ -76,8 +70,9 @@ export async function getDashboardSummary(now = new Date()) {
     totalMRR: round(totalMRR),
     pendingMRR: round(pendingMrr(liveRetainers)),
     mrrChangeVsLastMonth: round(totalMRR - previousMonthMrr),
-    activeClientCount: clients.filter((c) => c.currentTier !== "PROSPECT" && c.currentTier !== "CHURNED")
-      .length,
+    activeClientCount: clients.filter(
+      (c) => c.currentTier !== "PROSPECT" && c.currentTier !== "CHURNED"
+    ).length,
     clientsByTier,
     overdueTasks,
     tasksThisWeek,
@@ -95,7 +90,7 @@ export async function getDashboardSummary(now = new Date()) {
   };
 }
 
-export async function getRevenueSummary(now = new Date()) {
+export async function getRevenueSummary(prisma: PrismaClient, now = new Date()) {
   const retainers = await prisma.retainer.findMany({
     include: { client: { select: { id: true, businessName: true, isActive: true } } },
     orderBy: [{ status: "asc" }, { createdAt: "desc" }],

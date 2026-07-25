@@ -1,45 +1,37 @@
 import { z } from "zod";
+import {
+  InteractionType,
+  RetainerStatus,
+  RuleAnchor,
+  ServiceTierType,
+  TaskStatus,
+  TaskType,
+} from "../domain/enums";
 
-export const SERVICE_TIERS = [
-  "PROSPECT",
-  "WEBSITE_BUILD",
-  "WEBSITE_LIVE",
-  "BRAND_CURATION",
-  "SOCIAL_MEDIA",
-  "ANALYTICS",
-  "CHURNED",
-] as const;
-
-export const TASK_STATUSES = ["OPEN", "IN_PROGRESS", "DONE", "SNOOZED", "CANCELLED"] as const;
-
-export const TASK_TYPES = [
-  "MANUAL",
-  "AUTO_UPSELL_PITCH",
-  "AUTO_CHECK_IN",
-  "AUTO_INVOICE_REMINDER",
-  "AUTO_CONTRACT_RENEWAL",
-  "BUILD_MILESTONE",
-] as const;
-
-export const INTERACTION_TYPES = [
-  "CALL",
-  "EMAIL",
-  "MEETING",
-  "TEXT",
-  "SITE_VISIT",
-  "OTHER",
-] as const;
-
-export const RETAINER_STATUSES = [
-  "ACTIVE",
-  "PAUSED",
-  "CANCELLED",
-  "PENDING_FIRST_PAYMENT",
-] as const;
+/**
+ * These lists are derived from `domain/enums.ts` rather than retyped, so the set
+ * of values the API accepts can never drift from the set the app understands.
+ * That matters more on D1 than it did on Postgres: SQLite has no enum type, so
+ * these Zod schemas are the only thing standing between a typo and a row the
+ * dashboard cannot classify.
+ */
+export const SERVICE_TIERS = Object.values(ServiceTierType) as [
+  ServiceTierType,
+  ...ServiceTierType[],
+];
+export const TASK_STATUSES = Object.values(TaskStatus) as [TaskStatus, ...TaskStatus[]];
+export const TASK_TYPES = Object.values(TaskType) as [TaskType, ...TaskType[]];
+export const INTERACTION_TYPES = Object.values(InteractionType) as [
+  InteractionType,
+  ...InteractionType[],
+];
+export const RETAINER_STATUSES = Object.values(RetainerStatus) as [
+  RetainerStatus,
+  ...RetainerStatus[],
+];
+export const RULE_ANCHORS = Object.values(RuleAnchor) as [RuleAnchor, ...RuleAnchor[]];
 
 export const DEAL_STAGES = ["New", "Contacted", "Quoted", "Won", "Lost"] as const;
-
-export const RULE_ANCHORS = ["TIER_CHANGE", "RETAINER_START", "RETAINER_END"] as const;
 
 export const tierEnum = z.enum(SERVICE_TIERS);
 
@@ -166,15 +158,6 @@ export const updateTaskSchema = createTaskSchema.partial().extend({
   snoozedUntil: optionalDate,
 });
 
-export const taskQuerySchema = z.object({
-  assignedToId: z.string().optional(),
-  status: z.string().optional(), // comma-separated list
-  clientId: z.string().optional(),
-  type: z.string().optional(),
-  dueBefore: z.string().optional(),
-  includeCompleted: z.string().optional(),
-});
-
 // ---------------------------
 // Interactions
 // ---------------------------
@@ -213,16 +196,8 @@ export const convertDealSchema = z.object({
 // Documents
 // ---------------------------
 
-export const requestUploadSchema = z.object({
-  fileName: z.string().trim().min(1),
-  contentType: z.string().trim().min(1).default("application/octet-stream"),
-  category: optionalString,
-});
-
-export const confirmDocumentSchema = z.object({
-  fileName: z.string().trim().min(1),
-  fileUrl: z.string().trim().min(1),
-  storageKey: optionalString,
+/** The upload is one multipart request now, so only the metadata needs checking. */
+export const uploadDocumentSchema = z.object({
   category: optionalString,
 });
 

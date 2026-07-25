@@ -1,78 +1,66 @@
-import { Router } from "express";
-import { prisma } from "../config/db";
-import { asyncHandler } from "../middleware/errorHandler";
+import { Hono } from "hono";
+import { requireParam } from "../lib/http";
 import { createRetainerSchema, updateRetainerSchema } from "../utils/validation";
+import type { AppEnv } from "../types";
 
 /** Mounted at /api/retainers */
-export const retainersRouter = Router();
+export const retainersRouter = new Hono<AppEnv>();
 
-retainersRouter.get(
-  "/",
-  asyncHandler(async (_req, res) => {
-    const retainers = await prisma.retainer.findMany({
-      include: { client: { select: { id: true, businessName: true, isActive: true } } },
-      orderBy: [{ status: "asc" }, { createdAt: "desc" }],
-    });
-    res.json(retainers);
-  })
-);
+retainersRouter.get("/", async (c) => {
+  const retainers = await c.get("prisma").retainer.findMany({
+    include: { client: { select: { id: true, businessName: true, isActive: true } } },
+    orderBy: [{ status: "asc" }, { createdAt: "desc" }],
+  });
+  return c.json(retainers);
+});
 
-retainersRouter.patch(
-  "/:id",
-  asyncHandler(async (req, res) => {
-    const parsed = updateRetainerSchema.safeParse(req.body);
-    if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+retainersRouter.patch("/:id", async (c) => {
+  const parsed = updateRetainerSchema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) return c.json({ error: parsed.error.flatten() }, 400);
 
-    const data = { ...parsed.data };
-    // Activating a retainer with no start date would leave it out of the MRR
-    // trend entirely, so stamp today the moment money starts.
-    if (data.status === "ACTIVE" && !data.startDate) {
-      const existing = await prisma.retainer.findUniqueOrThrow({ where: { id: req.params.id } });
-      if (!existing.startDate) data.startDate = new Date();
-    }
+  const prisma = c.get("prisma");
+  const id = c.req.param("id");
+  const data = { ...parsed.data };
 
-    const retainer = await prisma.retainer.update({ where: { id: req.params.id }, data });
-    res.json(retainer);
-  })
-);
+  // Activating a retainer with no start date would leave it out of the MRR
+  // trend entirely, so stamp today the moment money starts.
+  if (data.status === "ACTIVE" && !data.startDate) {
+    const existing = await prisma.retainer.findUniqueOrThrow({ where: { id } });
+    if (!existing.startDate) data.startDate = new Date();
+  }
 
-retainersRouter.delete(
-  "/:id",
-  asyncHandler(async (req, res) => {
-    await prisma.retainer.delete({ where: { id: req.params.id } });
-    res.status(204).send();
-  })
-);
+  const retainer = await prisma.retainer.update({ where: { id }, data });
+  return c.json(retainer);
+});
+
+retainersRouter.delete("/:id", async (c) => {
+  await c.get("prisma").retainer.delete({ where: { id: c.req.param("id") } });
+  return c.body(null, 204);
+});
 
 /** Mounted at /api/clients/:clientId/retainers */
-export const clientRetainersRouter = Router({ mergeParams: true });
+export const clientRetainersRouter = new Hono<AppEnv>();
 
-clientRetainersRouter.get(
-  "/",
-  asyncHandler(async (req, res) => {
-    const retainers = await prisma.retainer.findMany({
-      where: { clientId: req.params.clientId },
-      orderBy: { createdAt: "desc" },
-    });
-    res.json(retainers);
-  })
-);
+clientRetainersRouter.get("/", async (c) => {
+  const retainers = await c.get("prisma").retainer.findMany({
+    where: { clientId: requireParam(c, "clientId") },
+    orderBy: { createdAt: "desc" },
+  });
+  return c.json(retainers);
+});
 
-clientRetainersRouter.post(
-  "/",
-  asyncHandler(async (req, res) => {
-    const parsed = createRetainerSchema.safeParse(req.body);
-    if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+clientRetainersRouter.post("/", async (c) => {
+  const parsed = createRetainerSchema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) return c.json({ error: parsed.error.flatten() }, 400);
 
-    const status = parsed.data.status ?? "PENDING_FIRST_PAYMENT";
-    const retainer = await prisma.retainer.create({
-      data: {
-        ...parsed.data,
-        status,
-        startDate: parsed.data.startDate ?? (status === "ACTIVE" ? new Date() : null),
-        clientId: req.params.clientId,
-      },
-    });
-    res.status(201).json(retainer);
-  })
-);
+  const status = parsed.data.status ?? "PENDING_FIRST_PAYMENT";
+  const retainer = await c.get("prisma").retainer.create({
+    data: {
+      ...parsed.data,
+      status,
+      startDate: parsed.data.startDate ?? (status === "ACTIVE" ? new Date() : null),
+      clientId: requireParam(c, "clientId"),
+    },
+  });
+  return c.json(retainer, 201);
+});

@@ -7,6 +7,13 @@ build/
 .env.*.local
 !.env.example
 
+# Wrangler / Cloudflare
+.dev.vars
+!.dev.vars.example
+.wrangler/
+server/src/generated/
+worker-configuration.d.ts
+
 *.log
 npm-debug.log*
 

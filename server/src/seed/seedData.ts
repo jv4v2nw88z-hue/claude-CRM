@@ -1,9 +1,15 @@
-import { PrismaClient, ServiceTierType } from "@prisma/client";
-import bcrypt from "bcryptjs";
+import type { PrismaClient } from "../generated/prisma/client";
+import { hashPassword } from "../lib/password";
+import type { RuleAnchor, ServiceTierType, TaskType } from "../domain/enums";
 
-const prisma = new PrismaClient();
-
-const DEFAULT_PASSWORD = process.env.SEED_PASSWORD ?? "changeme123";
+/**
+ * Seeding runs inside the Worker.
+ *
+ * D1 is only reachable through a binding, so there is no `tsx prisma/seed.ts`
+ * that can connect to it from a laptop. Instead this lives in the Worker and is
+ * triggered over HTTP by `scripts/seed.ts` (guarded by SEED_SECRET), which works
+ * identically against `wrangler dev` and the deployed database.
+ */
 
 function daysAgo(days: number): Date {
   const d = new Date();
@@ -19,8 +25,16 @@ function monthsAgo(months: number): Date {
   return d;
 }
 
-async function main() {
-  const passwordHash = await bcrypt.hash(DEFAULT_PASSWORD, 10);
+export interface SeedResult {
+  usersSeeded: boolean;
+  rulesSeeded: number;
+  clientsSeeded: number;
+  message: string;
+}
+
+export async function runSeed(prisma: PrismaClient, env: Env): Promise<SeedResult> {
+  const defaultPassword = env.SEED_PASSWORD || "changeme123";
+  const passwordHash = await hashPassword(defaultPassword);
 
   const brian = await prisma.user.upsert({
     where: { email: "brian@midigitalexpansion.com" },
@@ -44,13 +58,16 @@ async function main() {
     },
   });
 
-  await seedAutomationRules();
+  const rulesSeeded = await seedAutomationRules(prisma);
 
   const existingClients = await prisma.client.count();
   if (existingClients > 0) {
-    console.log(`Seed: ${existingClients} client(s) already present, leaving client data alone.`);
-    console.log("Seed complete.");
-    return;
+    return {
+      usersSeeded: true,
+      rulesSeeded,
+      clientsSeeded: 0,
+      message: `${existingClients} client(s) already present, left client data alone.`,
+    };
   }
 
   // ---------------------------------------------------------------
@@ -82,15 +99,26 @@ async function main() {
       },
       serviceHistory: {
         create: [
-          { fromTier: "PROSPECT", toTier: "WEBSITE_BUILD", changedAt: daysAgo(110), changedById: cole.id },
-          { fromTier: "WEBSITE_BUILD", toTier: "WEBSITE_LIVE", changedAt: daysAgo(74), changedById: brian.id },
+          {
+            fromTier: "PROSPECT",
+            toTier: "WEBSITE_BUILD",
+            changedAt: daysAgo(110),
+            changedById: cole.id,
+          },
+          {
+            fromTier: "WEBSITE_BUILD",
+            toTier: "WEBSITE_LIVE",
+            changedAt: daysAgo(74),
+            changedById: brian.id,
+          },
         ],
       },
       interactions: {
         create: [
           {
             type: "CALL",
-            summary: "Walked Dana through the launched site. She loves it. No retainer discussed yet.",
+            summary:
+              "Walked Dana through the launched site. She loves it. No retainer discussed yet.",
             occurredAt: daysAgo(72),
             loggedById: cole.id,
           },
@@ -130,9 +158,24 @@ async function main() {
       },
       serviceHistory: {
         create: [
-          { fromTier: "PROSPECT", toTier: "WEBSITE_BUILD", changedAt: daysAgo(220), changedById: cole.id },
-          { fromTier: "WEBSITE_BUILD", toTier: "WEBSITE_LIVE", changedAt: daysAgo(180), changedById: brian.id },
-          { fromTier: "WEBSITE_LIVE", toTier: "BRAND_CURATION", changedAt: monthsAgo(3), changedById: cole.id },
+          {
+            fromTier: "PROSPECT",
+            toTier: "WEBSITE_BUILD",
+            changedAt: daysAgo(220),
+            changedById: cole.id,
+          },
+          {
+            fromTier: "WEBSITE_BUILD",
+            toTier: "WEBSITE_LIVE",
+            changedAt: daysAgo(180),
+            changedById: brian.id,
+          },
+          {
+            fromTier: "WEBSITE_LIVE",
+            toTier: "BRAND_CURATION",
+            changedAt: monthsAgo(3),
+            changedById: cole.id,
+          },
         ],
       },
       interactions: {
@@ -179,17 +222,38 @@ async function main() {
       },
       serviceHistory: {
         create: [
-          { fromTier: "PROSPECT", toTier: "WEBSITE_BUILD", changedAt: daysAgo(340), changedById: cole.id },
-          { fromTier: "WEBSITE_BUILD", toTier: "WEBSITE_LIVE", changedAt: daysAgo(300), changedById: brian.id },
-          { fromTier: "WEBSITE_LIVE", toTier: "BRAND_CURATION", changedAt: daysAgo(240), changedById: cole.id },
-          { fromTier: "BRAND_CURATION", toTier: "SOCIAL_MEDIA", changedAt: monthsAgo(1), changedById: cole.id },
+          {
+            fromTier: "PROSPECT",
+            toTier: "WEBSITE_BUILD",
+            changedAt: daysAgo(340),
+            changedById: cole.id,
+          },
+          {
+            fromTier: "WEBSITE_BUILD",
+            toTier: "WEBSITE_LIVE",
+            changedAt: daysAgo(300),
+            changedById: brian.id,
+          },
+          {
+            fromTier: "WEBSITE_LIVE",
+            toTier: "BRAND_CURATION",
+            changedAt: daysAgo(240),
+            changedById: cole.id,
+          },
+          {
+            fromTier: "BRAND_CURATION",
+            toTier: "SOCIAL_MEDIA",
+            changedAt: monthsAgo(1),
+            changedById: cole.id,
+          },
         ],
       },
       interactions: {
         create: [
           {
             type: "CALL",
-            summary: "Upgraded to social management. Three posts a week plus story coverage on drop days.",
+            summary:
+              "Upgraded to social management. Three posts a week plus story coverage on drop days.",
             occurredAt: monthsAgo(1),
             loggedById: cole.id,
           },
@@ -219,7 +283,12 @@ async function main() {
       },
       serviceHistory: {
         create: [
-          { fromTier: "PROSPECT", toTier: "WEBSITE_BUILD", changedAt: daysAgo(21), changedById: cole.id },
+          {
+            fromTier: "PROSPECT",
+            toTier: "WEBSITE_BUILD",
+            changedAt: daysAgo(21),
+            changedById: cole.id,
+          },
         ],
       },
     },
@@ -256,11 +325,36 @@ async function main() {
       },
       serviceHistory: {
         create: [
-          { fromTier: "PROSPECT", toTier: "WEBSITE_BUILD", changedAt: daysAgo(440), changedById: cole.id },
-          { fromTier: "WEBSITE_BUILD", toTier: "WEBSITE_LIVE", changedAt: daysAgo(400), changedById: brian.id },
-          { fromTier: "WEBSITE_LIVE", toTier: "BRAND_CURATION", changedAt: daysAgo(330), changedById: cole.id },
-          { fromTier: "BRAND_CURATION", toTier: "SOCIAL_MEDIA", changedAt: daysAgo(250), changedById: cole.id },
-          { fromTier: "SOCIAL_MEDIA", toTier: "ANALYTICS", changedAt: monthsAgo(6), changedById: cole.id },
+          {
+            fromTier: "PROSPECT",
+            toTier: "WEBSITE_BUILD",
+            changedAt: daysAgo(440),
+            changedById: cole.id,
+          },
+          {
+            fromTier: "WEBSITE_BUILD",
+            toTier: "WEBSITE_LIVE",
+            changedAt: daysAgo(400),
+            changedById: brian.id,
+          },
+          {
+            fromTier: "WEBSITE_LIVE",
+            toTier: "BRAND_CURATION",
+            changedAt: daysAgo(330),
+            changedById: cole.id,
+          },
+          {
+            fromTier: "BRAND_CURATION",
+            toTier: "SOCIAL_MEDIA",
+            changedAt: daysAgo(250),
+            changedById: cole.id,
+          },
+          {
+            fromTier: "SOCIAL_MEDIA",
+            toTier: "ANALYTICS",
+            changedAt: monthsAgo(6),
+            changedById: cole.id,
+          },
         ],
       },
       interactions: {
@@ -329,21 +423,27 @@ async function main() {
     ],
   });
 
-  console.log("Seed complete.");
-  console.log(`  Users: brian@midigitalexpansion.com / cole@midigitalexpansion.com`);
-  console.log(`  Password: ${DEFAULT_PASSWORD}  <- change this after first login`);
+  return {
+    usersSeeded: true,
+    rulesSeeded,
+    clientsSeeded: 5,
+    message:
+      `Seeded 5 clients, 3 deals and 2 users. ` +
+      `Log in as brian@midigitalexpansion.com or cole@midigitalexpansion.com ` +
+      `with the seed password — change it after first login.`,
+  };
 }
 
-async function seedAutomationRules() {
+async function seedAutomationRules(prisma: PrismaClient): Promise<number> {
   const rules: {
     name: string;
     triggerTier: ServiceTierType | null;
-    anchor: "TIER_CHANGE" | "RETAINER_START" | "RETAINER_END";
+    anchor: RuleAnchor;
     daysAfterTrigger: number;
     repeatEveryDays?: number;
     requiresActiveRetainer?: boolean;
     taskTitleTemplate: string;
-    taskType: "AUTO_UPSELL_PITCH" | "AUTO_CHECK_IN" | "AUTO_CONTRACT_RENEWAL";
+    taskType: TaskType;
   }[] = [
     {
       name: "Pitch Brand Curation",
@@ -398,16 +498,12 @@ async function seedAutomationRules() {
     },
   ];
 
+  let created = 0;
   for (const rule of rules) {
     const existing = await prisma.automationRule.findFirst({ where: { name: rule.name } });
     if (existing) continue;
     await prisma.automationRule.create({ data: rule });
+    created++;
   }
+  return created;
 }
-
-main()
-  .catch((err) => {
-    console.error(err);
-    process.exitCode = 1;
-  })
-  .finally(() => prisma.$disconnect());

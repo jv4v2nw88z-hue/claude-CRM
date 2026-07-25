@@ -1,49 +1,53 @@
-import { Router } from "express";
-import bcrypt from "bcryptjs";
-import jwt from "jsonwebtoken";
-import { prisma } from "../config/db";
-import { env } from "../config/env";
-import { asyncHandler } from "../middleware/errorHandler";
+import { Hono } from "hono";
+import { deleteCookie, setCookie } from "hono/cookie";
+import { isProduction, requireJwtSecret } from "../config/env";
+import { verifyPassword } from "../lib/password";
+import { SESSION_COOKIE, SESSION_TTL_SECONDS, signSession } from "../lib/jwt";
 import { requireAuth } from "../middleware/requireAuth";
 import { loginSchema } from "../utils/validation";
+import type { AppEnv } from "../types";
 
-const router = Router();
+const router = new Hono<AppEnv>();
 
-const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+router.post("/login", async (c) => {
+  const parsed = loginSchema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) {
+    return c.json({ error: "Email and password are required" }, 400);
+  }
 
-router.post(
-  "/login",
-  asyncHandler(async (req, res) => {
-    const parsed = loginSchema.safeParse(req.body);
-    if (!parsed.success) return res.status(400).json({ error: "Email and password are required" });
+  const { email, password } = parsed.data;
+  const user = await c
+    .get("prisma")
+    .user.findUnique({ where: { email: email.toLowerCase().trim() } });
+  // Same response either way so the form can't be used to enumerate accounts.
+  if (!user) return c.json({ error: "Invalid credentials" }, 401);
 
-    const { email, password } = parsed.data;
-    const user = await prisma.user.findUnique({ where: { email: email.toLowerCase().trim() } });
-    // Same response either way so the form can't be used to enumerate accounts.
-    if (!user) return res.status(401).json({ error: "Invalid credentials" });
+  const valid = await verifyPassword(password, user.passwordHash);
+  if (!valid) return c.json({ error: "Invalid credentials" }, 401);
 
-    const valid = await bcrypt.compare(password, user.passwordHash);
-    if (!valid) return res.status(401).json({ error: "Invalid credentials" });
+  const token = await signSession(user.id, requireJwtSecret(c.env));
 
-    const token = jwt.sign({ userId: user.id }, env.JWT_SECRET, { expiresIn: "30d" });
-    res.cookie("session_token", token, {
-      httpOnly: true,
-      secure: env.NODE_ENV === "production",
-      sameSite: env.NODE_ENV === "production" ? "none" : "lax",
-      maxAge: THIRTY_DAYS_MS,
-    });
+  // The Worker serves the React app and the API from one origin, so the session
+  // cookie is first-party and SameSite=Lax is enough — no SameSite=None needed
+  // (and none of the third-party-cookie fragility that came with it).
+  setCookie(c, SESSION_COOKIE, token, {
+    httpOnly: true,
+    secure: isProduction(c.env),
+    sameSite: "Lax",
+    path: "/",
+    maxAge: SESSION_TTL_SECONDS,
+  });
 
-    res.json({ user: { id: user.id, name: user.name, email: user.email, role: user.role } });
-  })
-);
-
-router.post("/logout", (_req, res) => {
-  res.clearCookie("session_token");
-  res.status(204).send();
+  return c.json({
+    user: { id: user.id, name: user.name, email: user.email, role: user.role },
+  });
 });
 
-router.get("/me", requireAuth, (req, res) => {
-  res.json({ user: req.user });
+router.post("/logout", (c) => {
+  deleteCookie(c, SESSION_COOKIE, { path: "/" });
+  return c.body(null, 204);
 });
+
+router.get("/me", requireAuth, (c) => c.json({ user: c.get("user") }));
 
 export default router;

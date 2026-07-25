@@ -1,0 +1,24 @@
+# Local development secrets for `wrangler dev`.
+# Copy to `.dev.vars` (gitignored) and fill in. Production values are set with
+# `npx wrangler secret put <NAME>` instead — never commit real secrets.
+
+# Required. Signs the session cookie. 16+ chars; generate with:
+#   node -e "console.log(crypto.randomBytes(32).toString('hex'))"
+JWT_SECRET="dev-only-change-me-at-least-16-chars"
+
+# Optional. Guards POST /api/internal/run-automation so an external caller can
+# fire the automation engine without waiting for the 6am cron trigger.
+AUTOMATION_SECRET="dev-automation-secret"
+
+# Optional. Guards POST /api/internal/seed.
+SEED_SECRET="dev-seed-secret"
+
+# Optional. Password given to the two seeded users. Change after first login.
+SEED_PASSWORD="changeme123"
+
+# Optional. With no key set, notification emails log to the console instead.
+RESEND_API_KEY=""
+
+# Optional. Mounts the QA-only hooks the lifecycle check needs to backdate
+# automation anchors. MUST stay unset in production.
+QA_HOOKS_ENABLED="true"

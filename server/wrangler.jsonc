@@ -1,0 +1,66 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "midigitalexpansion-crm",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-07-01",
+  "compatibility_flags": ["nodejs_compat"],
+
+  "observability": {
+    "enabled": true
+  },
+
+  // The React build is served by this same Worker, which is the whole reason the
+  // session cookie can stay SameSite=Lax first-party: the API and the app share
+  // an origin. `run_worker_first` keeps /api/* off the asset router, and the SPA
+  // fallback hands every other unmatched path to index.html for React Router.
+  "assets": {
+    "directory": "../client/dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
+  },
+
+  // Create with:  npx wrangler d1 create midigitalexpansion-crm
+  // then paste the returned database_id over the placeholder below.
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "midigitalexpansion-crm",
+      "database_id": "REPLACE_WITH_YOUR_D1_DATABASE_ID",
+      "migrations_dir": "migrations"
+    }
+  ],
+
+  // Create with:  npx wrangler r2 bucket create midigitalexpansion-crm-documents
+  // Optional — with the bucket absent the Documents tab reports uploads disabled
+  // rather than erroring, exactly as the S3 version did.
+  "r2_buckets": [
+    {
+      "binding": "DOCUMENTS",
+      "bucket_name": "midigitalexpansion-crm-documents"
+    }
+  ],
+
+  // Cron triggers fire in UTC. 10:00 UTC is 06:00 Eastern during EDT, which is
+  // the 6am the automation engine was always specified to run at.
+  "triggers": {
+    "crons": ["0 10 * * *"]
+  },
+
+  "vars": {
+    "APP_ENV": "production",
+    "MAIL_FROM": "MiDigitalExpansion CRM <crm@midigitalexpansion.com>",
+    // Set when the R2 bucket is served from a public custom domain. Leave empty
+    // and documents stream back through the Worker instead.
+    "R2_PUBLIC_BASE_URL": "",
+    // Only needed if you ever serve the frontend from a different origin than
+    // this Worker. Same-origin (the default) needs no CORS at all.
+    "CORS_ORIGIN": ""
+  }
+
+  // Secrets — never commit these. Set with `npx wrangler secret put <NAME>`:
+  //   JWT_SECRET         (required, 16+ chars)
+  //   AUTOMATION_SECRET  (optional, guards POST /api/internal/run-automation)
+  //   SEED_SECRET        (optional, guards POST /api/internal/seed)
+  //   RESEND_API_KEY     (optional, enables notification emails)
+}

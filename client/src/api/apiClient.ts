@@ -14,7 +14,9 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     ...init,
     credentials: "include", // the session token is an httpOnly cookie
     headers: {
-      ...(init.body ? { "Content-Type": "application/json" } : {}),
+      // Only JSON bodies get a JSON content type. FormData must be left alone so
+      // the browser can set multipart/form-data with its own boundary.
+      ...(typeof init.body === "string" ? { "Content-Type": "application/json" } : {}),
       ...init.headers,
     },
   });
@@ -45,6 +47,9 @@ export const api = {
   get: <T>(path: string) => request<T>(path),
   post: <T>(path: string, body?: unknown) =>
     request<T>(path, { method: "POST", body: body === undefined ? undefined : JSON.stringify(body) }),
+  /** Multipart POST, used by the document upload. */
+  postForm: <T>(path: string, form: FormData) =>
+    request<T>(path, { method: "POST", body: form }),
   patch: <T>(path: string, body: unknown) =>
     request<T>(path, { method: "PATCH", body: JSON.stringify(body) }),
   delete: <T>(path: string) => request<T>(path, { method: "DELETE" }),

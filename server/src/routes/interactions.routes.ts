@@ -1,58 +1,49 @@
-import { Router } from "express";
-import { prisma } from "../config/db";
-import { asyncHandler } from "../middleware/errorHandler";
+import { Hono } from "hono";
+import { requireParam } from "../lib/http";
 import { createInteractionSchema } from "../utils/validation";
+import type { AppEnv } from "../types";
 
 /** Mounted at /api/clients/:clientId/interactions */
-export const clientInteractionsRouter = Router({ mergeParams: true });
+export const clientInteractionsRouter = new Hono<AppEnv>();
 
-clientInteractionsRouter.get(
-  "/",
-  asyncHandler(async (req, res) => {
-    const interactions = await prisma.interaction.findMany({
-      where: { clientId: req.params.clientId },
-      include: { loggedBy: { select: { id: true, name: true } } },
-      orderBy: { occurredAt: "desc" },
-    });
-    res.json(interactions);
-  })
-);
+clientInteractionsRouter.get("/", async (c) => {
+  const interactions = await c.get("prisma").interaction.findMany({
+    where: { clientId: requireParam(c, "clientId") },
+    include: { loggedBy: { select: { id: true, name: true } } },
+    orderBy: { occurredAt: "desc" },
+  });
+  return c.json(interactions);
+});
 
-clientInteractionsRouter.post(
-  "/",
-  asyncHandler(async (req, res) => {
-    const parsed = createInteractionSchema.safeParse(req.body);
-    if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+clientInteractionsRouter.post("/", async (c) => {
+  const parsed = createInteractionSchema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) return c.json({ error: parsed.error.flatten() }, 400);
 
-    const interaction = await prisma.interaction.create({
-      data: {
-        clientId: req.params.clientId,
-        type: parsed.data.type,
-        summary: parsed.data.summary,
-        occurredAt: parsed.data.occurredAt ?? new Date(),
-        loggedById: req.user?.id ?? null,
-      },
-      include: { loggedBy: { select: { id: true, name: true } } },
-    });
-    res.status(201).json(interaction);
-  })
-);
+  const interaction = await c.get("prisma").interaction.create({
+    data: {
+      clientId: requireParam(c, "clientId"),
+      type: parsed.data.type,
+      summary: parsed.data.summary,
+      occurredAt: parsed.data.occurredAt ?? new Date(),
+      loggedById: c.get("user")?.id ?? null,
+    },
+    include: { loggedBy: { select: { id: true, name: true } } },
+  });
+  return c.json(interaction, 201);
+});
 
 /** Mounted at /api/interactions — the cross-client activity feed. */
-export const interactionsRouter = Router();
+export const interactionsRouter = new Hono<AppEnv>();
 
-interactionsRouter.get(
-  "/",
-  asyncHandler(async (req, res) => {
-    const take = Math.min(Number(req.query.limit ?? 20) || 20, 100);
-    const interactions = await prisma.interaction.findMany({
-      take,
-      include: {
-        loggedBy: { select: { id: true, name: true } },
-        client: { select: { id: true, businessName: true } },
-      },
-      orderBy: { occurredAt: "desc" },
-    });
-    res.json(interactions);
-  })
-);
+interactionsRouter.get("/", async (c) => {
+  const take = Math.min(Number(c.req.query("limit") ?? 20) || 20, 100);
+  const interactions = await c.get("prisma").interaction.findMany({
+    take,
+    include: {
+      loggedBy: { select: { id: true, name: true } },
+      client: { select: { id: true, businessName: true } },
+    },
+    orderBy: { occurredAt: "desc" },
+  });
+  return c.json(interactions);
+});

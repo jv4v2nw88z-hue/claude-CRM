@@ -1,11 +1,12 @@
-import cron from "node-cron";
-import { AutomationRule, Client, Retainer, ServiceTierType, Task } from "@prisma/client";
-import { prisma } from "../config/db";
-import { env } from "../config/env";
+import type { PrismaClient } from "../generated/prisma/client";
+import {
+  OPEN_TASK_STATUSES,
+  TIER_LABELS,
+  type ServiceTierType,
+  type TaskType,
+} from "../domain/enums";
 import { sendTaskNotificationEmail } from "../services/emailService";
 import { addDays, daysBetween, startOfDay } from "../utils/dateHelpers";
-
-type ClientWithRelations = Client & { retainers: Retainer[]; tasks: Task[] };
 
 export interface AutomationRunResult {
   ranAt: Date;
@@ -14,20 +15,74 @@ export interface AutomationRunResult {
   tasksCreated: { taskId: string; clientId: string; ruleId: string; title: string }[];
 }
 
+type Rule = {
+  id: string;
+  name: string;
+  triggerTier: string | null;
+  anchor: string;
+  daysAfterTrigger: number;
+  repeatEveryDays: number | null;
+  requiresActiveRetainer: boolean;
+  taskTitleTemplate: string;
+  taskType: string;
+};
+
+type Retainer = { status: string; startDate: Date | null; endDate: Date | null };
+type Task = { id: string; sourceRuleId: string | null; status: string; createdAt: Date };
+type ClientRow = {
+  id: string;
+  businessName: string;
+  currentTier: string;
+  websiteLaunchDate: Date | null;
+  accountOwnerId: string | null;
+  retainers: Retainer[];
+  tasks: Task[];
+};
+
 /**
- * Runs daily. Checks every active client against every active automation rule and
- * creates the task the moment the rule's countdown is up — this is what stops a
- * client from quietly sitting at WEBSITE_LIVE forever with nobody pitching them.
+ * Runs daily on a Cloudflare Cron Trigger. Checks every active client against
+ * every active automation rule and creates the task the moment the rule's
+ * countdown is up — this is what stops a client from quietly sitting at
+ * WEBSITE_LIVE forever with nobody pitching them.
  *
  * Idempotent by design: a rule that already has a live task for a client is
  * skipped, so re-running the job on the same day creates nothing new.
+ *
+ * Everything the rules need is loaded up front. The Node version queried the
+ * service-history table once per client × rule; on D1 each query is a real round
+ * trip and Workers cap the subrequests a single invocation may make, so the same
+ * work is done from three bulk reads instead of O(clients × rules) of them.
  */
-export async function runAutomationEngine(now = new Date()): Promise<AutomationRunResult> {
-  const rules = await prisma.automationRule.findMany({ where: { isActive: true } });
-  const clients = await prisma.client.findMany({
-    where: { isActive: true },
-    include: { retainers: true, tasks: true },
+export async function runAutomationEngine(
+  prisma: PrismaClient,
+  env: Env,
+  now = new Date()
+): Promise<AutomationRunResult> {
+  const [rules, clients, users] = await Promise.all([
+    prisma.automationRule.findMany({ where: { isActive: true } }),
+    prisma.client.findMany({
+      where: { isActive: true },
+      include: { retainers: true, tasks: true },
+    }),
+    prisma.user.findMany({ select: { id: true, name: true, email: true, role: true } }),
+  ]);
+
+  const history = await prisma.serviceHistoryEntry.findMany({
+    where: { clientId: { in: clients.map((c) => c.id) } },
+    orderBy: { changedAt: "desc" },
+    select: { clientId: true, toTier: true, changedAt: true },
   });
+
+  // Latest move into each (client, tier) pair — the anchor for tier-based rules.
+  const latestTierChange = new Map<string, Date>();
+  for (const entry of history) {
+    const key = `${entry.clientId}:${entry.toTier}`;
+    if (!latestTierChange.has(key)) latestTierChange.set(key, entry.changedAt);
+  }
+
+  const technicalUser = users.find((u) => u.role === "TECHNICAL") ?? null;
+  const salesUser = users.find((u) => u.role === "SALES") ?? null;
+  const usersById = new Map(users.map((u) => [u.id, u]));
 
   const result: AutomationRunResult = {
     ranAt: now,
@@ -38,15 +93,38 @@ export async function runAutomationEngine(now = new Date()): Promise<AutomationR
 
   for (const client of clients) {
     for (const rule of rules) {
-      const created = await evaluateRule(client, rule, now);
-      if (created) {
-        result.tasksCreated.push({
-          taskId: created.id,
+      const plan = planTask(client as ClientRow, rule as Rule, latestTierChange, now);
+      if (!plan) continue;
+
+      const assignedToId = resolveAssignee(
+        client as ClientRow,
+        rule as Rule,
+        technicalUser,
+        salesUser
+      );
+
+      const newTask = await prisma.task.create({
+        data: {
           clientId: client.id,
-          ruleId: rule.id,
-          title: created.title,
-        });
-      }
+          title: plan.title,
+          description: `Generated automatically by the "${rule.name}" rule.`,
+          type: rule.taskType,
+          autoGenerated: true,
+          sourceRuleId: rule.id,
+          dueDate: startOfDay(now),
+          assignedToId,
+        },
+      });
+
+      const assignee = assignedToId ? usersById.get(assignedToId) ?? null : null;
+      await sendTaskNotificationEmail(env, newTask, client, assignee);
+
+      result.tasksCreated.push({
+        taskId: newTask.id,
+        clientId: client.id,
+        ruleId: rule.id,
+        title: newTask.title,
+      });
     }
   }
 
@@ -56,11 +134,13 @@ export async function runAutomationEngine(now = new Date()): Promise<AutomationR
   return result;
 }
 
-async function evaluateRule(
-  client: ClientWithRelations,
-  rule: AutomationRule,
+/** Decides whether a rule is due for a client, and what the task would be called. */
+function planTask(
+  client: ClientRow,
+  rule: Rule,
+  latestTierChange: Map<string, Date>,
   now: Date
-): Promise<Task | null> {
+): { title: string } | null {
   // A null triggerTier means "any tier" — used by the retainer-anchored rules.
   if (rule.triggerTier && client.currentTier !== rule.triggerTier) return null;
   if (rule.requiresActiveRetainer && !client.retainers.some((r) => r.status === "ACTIVE")) {
@@ -68,12 +148,12 @@ async function evaluateRule(
   }
 
   const liveTasksFromRule = client.tasks.filter(
-    (t) => t.sourceRuleId === rule.id && ["OPEN", "IN_PROGRESS", "SNOOZED"].includes(t.status)
+    (t) => t.sourceRuleId === rule.id && OPEN_TASK_STATUSES.includes(t.status as never)
   );
   // Never stack a second copy of a nag on top of one that's still open.
   if (liveTasksFromRule.length > 0) return null;
 
-  const anchorDate = await getAnchorDate(client, rule);
+  const anchorDate = getAnchorDate(client, rule, latestTierChange);
   if (!anchorDate) return null;
 
   // Recurring rules (quarterly check-in) count from the last task they produced,
@@ -81,36 +161,11 @@ async function evaluateRule(
   const effectiveAnchor = rule.repeatEveryDays
     ? latestTaskDateFromRule(client, rule.id) ?? anchorDate
     : anchorDate;
-  const threshold = rule.repeatEveryDays
-    ? rule.repeatEveryDays
-    : rule.daysAfterTrigger;
+  const threshold = rule.repeatEveryDays ? rule.repeatEveryDays : rule.daysAfterTrigger;
 
-  const daysSinceAnchor = daysBetween(effectiveAnchor, now);
-  if (daysSinceAnchor < threshold) return null;
+  if (daysBetween(effectiveAnchor, now) < threshold) return null;
 
-  const title = renderTemplate(rule.taskTitleTemplate, client, rule.triggerTier);
-
-  const assignedToId = await resolveAssignee(client, rule);
-
-  const newTask = await prisma.task.create({
-    data: {
-      clientId: client.id,
-      title,
-      description: `Generated automatically by the "${rule.name}" rule.`,
-      type: rule.taskType,
-      autoGenerated: true,
-      sourceRuleId: rule.id,
-      dueDate: startOfDay(now),
-      assignedToId,
-    },
-  });
-
-  const assignee = assignedToId
-    ? await prisma.user.findUnique({ where: { id: assignedToId } })
-    : null;
-  await sendTaskNotificationEmail(newTask, client, assignee);
-
-  return newTask;
+  return { title: renderTemplate(rule.taskTitleTemplate, client, rule.triggerTier) };
 }
 
 /**
@@ -120,10 +175,11 @@ async function evaluateRule(
  *  - Other tier rules anchor on the most recent move into that tier.
  *  - Retainer rules anchor on the retainer's start or end date.
  */
-async function getAnchorDate(
-  client: ClientWithRelations,
-  rule: AutomationRule
-): Promise<Date | null> {
+function getAnchorDate(
+  client: ClientRow,
+  rule: Rule,
+  latestTierChange: Map<string, Date>
+): Date | null {
   if (rule.anchor === "RETAINER_START") {
     const active = client.retainers
       .filter((r) => r.status === "ACTIVE" && r.startDate)
@@ -146,14 +202,10 @@ async function getAnchorDate(
   }
 
   const tier = rule.triggerTier ?? client.currentTier;
-  const historyEntry = await prisma.serviceHistoryEntry.findFirst({
-    where: { clientId: client.id, toTier: tier },
-    orderBy: { changedAt: "desc" },
-  });
-  return historyEntry?.changedAt ?? null;
+  return latestTierChange.get(`${client.id}:${tier}`) ?? null;
 }
 
-function latestTaskDateFromRule(client: ClientWithRelations, ruleId: string): Date | null {
+function latestTaskDateFromRule(client: ClientRow, ruleId: string): Date | null {
   const fromRule = client.tasks
     .filter((t) => t.sourceRuleId === ruleId)
     .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
@@ -161,51 +213,26 @@ function latestTaskDateFromRule(client: ClientWithRelations, ruleId: string): Da
 }
 
 /** Sales nags go to the account owner; build work goes to the technical user. */
-async function resolveAssignee(
-  client: ClientWithRelations,
-  rule: AutomationRule
-): Promise<string | null> {
-  if (rule.taskType === "BUILD_MILESTONE") {
-    const technical = await prisma.user.findFirst({ where: { role: "TECHNICAL" } });
-    if (technical) return technical.id;
+function resolveAssignee(
+  client: ClientRow,
+  rule: Rule,
+  technicalUser: { id: string } | null,
+  salesUser: { id: string } | null
+): string | null {
+  if (rule.taskType === ("BUILD_MILESTONE" satisfies TaskType) && technicalUser) {
+    return technicalUser.id;
   }
   if (client.accountOwnerId) return client.accountOwnerId;
-  const sales = await prisma.user.findFirst({ where: { role: "SALES" } });
-  return sales?.id ?? null;
+  return salesUser?.id ?? null;
 }
-
-const TIER_LABELS: Record<ServiceTierType, string> = {
-  PROSPECT: "Prospect",
-  WEBSITE_BUILD: "Website Build",
-  WEBSITE_LIVE: "Website Live",
-  BRAND_CURATION: "Brand Curation",
-  SOCIAL_MEDIA: "Social Media",
-  ANALYTICS: "Analytics",
-  CHURNED: "Churned",
-};
 
 export function renderTemplate(
   template: string,
-  client: Pick<Client, "businessName" | "currentTier">,
-  triggerTier: ServiceTierType | null
+  client: { businessName: string; currentTier: string },
+  triggerTier: string | null
 ): string {
-  const tier = triggerTier ?? client.currentTier;
+  const tier = (triggerTier ?? client.currentTier) as ServiceTierType;
   return template
     .replace(/\{\{businessName\}\}/g, client.businessName)
-    .replace(/\{\{tier\}\}/g, TIER_LABELS[tier]);
-}
-
-let scheduled: cron.ScheduledTask | null = null;
-
-export function startAutomationCron() {
-  if (env.DISABLE_CRON) {
-    console.log("[automation] cron disabled via DISABLE_CRON");
-    return;
-  }
-  if (scheduled) return;
-
-  scheduled = cron.schedule(env.AUTOMATION_CRON, () => {
-    runAutomationEngine().catch((err) => console.error("Automation engine failed:", err));
-  });
-  console.log(`[automation] scheduled with cron expression "${env.AUTOMATION_CRON}"`);
+    .replace(/\{\{tier\}\}/g, TIER_LABELS[tier] ?? tier);
 }

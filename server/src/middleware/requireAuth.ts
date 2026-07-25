@@ -1,36 +1,31 @@
-import { Request, Response, NextFunction } from "express";
-import jwt from "jsonwebtoken";
-import { prisma } from "../config/db";
-import { env } from "../config/env";
+import { createMiddleware } from "hono/factory";
+import { getCookie } from "hono/cookie";
+import { requireJwtSecret } from "../config/env";
+import { readSession, SESSION_COOKIE } from "../lib/jwt";
+import type { AppEnv, AuthedUser } from "../types";
+import type { UserRole } from "../domain/enums";
 
-export interface AuthedUser {
-  id: string;
-  name: string;
-  email: string;
-  role: "SALES" | "TECHNICAL";
-}
+export const requireAuth = createMiddleware<AppEnv>(async (c, next) => {
+  const token = getCookie(c, SESSION_COOKIE);
+  if (!token) return c.json({ error: "Not authenticated" }, 401);
 
-declare global {
-  // eslint-disable-next-line @typescript-eslint/no-namespace
-  namespace Express {
-    interface Request {
-      user?: AuthedUser;
-    }
-  }
-}
+  const userId = await readSession(token, requireJwtSecret(c.env));
+  if (!userId) return c.json({ error: "Invalid or expired session" }, 401);
 
-export async function requireAuth(req: Request, res: Response, next: NextFunction) {
-  const token = req.cookies?.session_token;
-  if (!token) return res.status(401).json({ error: "Not authenticated" });
+  const user = await c.get("prisma").user.findUnique({ where: { id: userId } });
+  if (!user) return c.json({ error: "Invalid session" }, 401);
 
-  try {
-    const payload = jwt.verify(token, env.JWT_SECRET) as { userId: string };
-    const user = await prisma.user.findUnique({ where: { id: payload.userId } });
-    if (!user) return res.status(401).json({ error: "Invalid session" });
+  const authed: AuthedUser = {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    role: user.role as UserRole,
+  };
+  c.set("user", authed);
+  await next();
+});
 
-    req.user = { id: user.id, name: user.name, email: user.email, role: user.role };
-    next();
-  } catch {
-    return res.status(401).json({ error: "Invalid or expired session" });
-  }
+/** The signed-in user on any route mounted behind `requireAuth`. */
+export function currentUser(c: { get: (key: "user") => AuthedUser | null }): AuthedUser | null {
+  return c.get("user");
 }

@@ -1,73 +1,68 @@
-import { Router } from "express";
-import { Prisma } from "@prisma/client";
-import { prisma } from "../config/db";
-import { asyncHandler } from "../middleware/errorHandler";
+import { Hono } from "hono";
+import { requireParam } from "../lib/http";
 import { createContactSchema, updateContactSchema } from "../utils/validation";
+import type { PrismaClient } from "../generated/prisma/client";
+import type { AppEnv } from "../types";
 
 /** Mounted at /api/clients/:clientId/contacts */
-export const clientContactsRouter = Router({ mergeParams: true });
+export const clientContactsRouter = new Hono<AppEnv>();
 
-clientContactsRouter.get(
-  "/",
-  asyncHandler(async (req, res) => {
-    const contacts = await prisma.contact.findMany({
-      where: { clientId: req.params.clientId },
-      orderBy: [{ isPrimary: "desc" }, { lastName: "asc" }],
-    });
-    res.json(contacts);
-  })
-);
+clientContactsRouter.get("/", async (c) => {
+  const contacts = await c.get("prisma").contact.findMany({
+    where: { clientId: requireParam(c, "clientId") },
+    orderBy: [{ isPrimary: "desc" }, { lastName: "asc" }],
+  });
+  return c.json(contacts);
+});
 
-clientContactsRouter.post(
-  "/",
-  asyncHandler(async (req, res) => {
-    const parsed = createContactSchema.safeParse(req.body);
-    if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+clientContactsRouter.post("/", async (c) => {
+  const parsed = createContactSchema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) return c.json({ error: parsed.error.flatten() }, 400);
 
-    const { clientId } = req.params;
-    const contact = await prisma.$transaction(async (tx) => {
-      if (parsed.data.isPrimary) await demoteOtherPrimaries(tx, clientId);
-      return tx.contact.create({ data: { ...parsed.data, clientId } });
-    });
+  const prisma = c.get("prisma");
+  const clientId = requireParam(c, "clientId");
 
-    res.status(201).json(contact);
-  })
-);
+  // Demote first, create second. D1 has no transactions, so if the create fails
+  // the client is briefly left with no primary contact — which the sidebar
+  // renders as "no primary contact" and the next save fixes. The reverse order
+  // could leave two primaries, which the UI has no way to show or resolve.
+  if (parsed.data.isPrimary) await demoteOtherPrimaries(prisma, clientId);
+  const contact = await prisma.contact.create({ data: { ...parsed.data, clientId } });
+
+  return c.json(contact, 201);
+});
 
 /** Mounted at /api/contacts */
-export const contactsRouter = Router();
+export const contactsRouter = new Hono<AppEnv>();
 
-contactsRouter.patch(
-  "/:id",
-  asyncHandler(async (req, res) => {
-    const parsed = updateContactSchema.safeParse(req.body);
-    if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+contactsRouter.patch("/:id", async (c) => {
+  const parsed = updateContactSchema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) return c.json({ error: parsed.error.flatten() }, 400);
 
-    const contact = await prisma.$transaction(async (tx) => {
-      const existing = await tx.contact.findUniqueOrThrow({ where: { id: req.params.id } });
-      if (parsed.data.isPrimary) await demoteOtherPrimaries(tx, existing.clientId, existing.id);
-      return tx.contact.update({ where: { id: req.params.id }, data: parsed.data });
-    });
+  const prisma = c.get("prisma");
+  const id = c.req.param("id");
 
-    res.json(contact);
-  })
-);
+  const existing = await prisma.contact.findUniqueOrThrow({ where: { id } });
+  if (parsed.data.isPrimary) {
+    await demoteOtherPrimaries(prisma, existing.clientId, existing.id);
+  }
+  const contact = await prisma.contact.update({ where: { id }, data: parsed.data });
 
-contactsRouter.delete(
-  "/:id",
-  asyncHandler(async (req, res) => {
-    await prisma.contact.delete({ where: { id: req.params.id } });
-    res.status(204).send();
-  })
-);
+  return c.json(contact);
+});
+
+contactsRouter.delete("/:id", async (c) => {
+  await c.get("prisma").contact.delete({ where: { id: c.req.param("id") } });
+  return c.body(null, 204);
+});
 
 /** Exactly one primary contact per client — the sidebar shows only one. */
 async function demoteOtherPrimaries(
-  tx: Prisma.TransactionClient,
+  prisma: PrismaClient,
   clientId: string,
   exceptId?: string
-) {
-  await tx.contact.updateMany({
+): Promise<void> {
+  await prisma.contact.updateMany({
     where: { clientId, isPrimary: true, ...(exceptId ? { id: { not: exceptId } } : {}) },
     data: { isPrimary: false },
   });

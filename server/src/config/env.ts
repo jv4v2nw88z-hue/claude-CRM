@@ -1,43 +1,66 @@
-import "dotenv/config";
-import { z } from "zod";
+/**
+ * Environment access for the Worker.
+ *
+ * There is no `process.env` here and no dotenv: plaintext settings come from
+ * `vars` in wrangler.jsonc, secrets from `wrangler secret put`, and both arrive
+ * together on the request as `c.env`. Everything except JWT_SECRET is optional
+ * and degrades gracefully, exactly as the Node version did.
+ */
 
-const envSchema = z.object({
-  NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
-  PORT: z.coerce.number().default(4000),
-  DATABASE_URL: z.string().min(1, "DATABASE_URL is required"),
-  JWT_SECRET: z.string().min(16, "JWT_SECRET must be at least 16 characters"),
-  CORS_ORIGIN: z.string().default("http://localhost:5173"),
+export const JWT_SECRET_MIN_LENGTH = 16;
 
-  // Optional integrations. Each one degrades gracefully when unset so the app
-  // still boots on a laptop with nothing but Postgres running.
-  RESEND_API_KEY: z.string().optional(),
-  MAIL_FROM: z.string().default("MiDigitalExpansion CRM <crm@midigitalexpansion.com>"),
-
-  S3_BUCKET: z.string().optional(),
-  S3_REGION: z.string().default("auto"),
-  S3_ENDPOINT: z.string().optional(), // set for Cloudflare R2
-  S3_ACCESS_KEY: z.string().optional(),
-  S3_SECRET_KEY: z.string().optional(),
-  S3_PUBLIC_BASE_URL: z.string().optional(),
-
-  // Lets an external cron service (cron-job.org etc.) poke the automation engine
-  // if the host spins the process down between requests.
-  AUTOMATION_CRON: z.string().default("0 6 * * *"),
-  AUTOMATION_SECRET: z.string().optional(),
-  DISABLE_CRON: z.coerce.boolean().default(false),
-});
-
-const parsed = envSchema.safeParse(process.env);
-
-if (!parsed.success) {
-  console.error("Invalid environment configuration:");
-  console.error(parsed.error.flatten().fieldErrors);
-  process.exit(1);
+/** Throws at the edge of the request rather than booting a half-configured app. */
+export function requireJwtSecret(env: Env): string {
+  const secret = env.JWT_SECRET;
+  if (!secret || secret.length < JWT_SECRET_MIN_LENGTH) {
+    throw new Error(
+      `JWT_SECRET is missing or too short (needs ${JWT_SECRET_MIN_LENGTH}+ characters). ` +
+        `Set it with: npx wrangler secret put JWT_SECRET`
+    );
+  }
+  return secret;
 }
 
-export const env = parsed.data;
+export function isProduction(env: Env): boolean {
+  return (env.APP_ENV ?? "production") === "production";
+}
 
-export const isEmailEnabled = Boolean(env.RESEND_API_KEY);
-export const isStorageEnabled = Boolean(
-  env.S3_BUCKET && env.S3_ACCESS_KEY && env.S3_SECRET_KEY
-);
+export function isEmailEnabled(env: Env): boolean {
+  return Boolean(env.RESEND_API_KEY);
+}
+
+/** R2 is a binding, so "configured" simply means the bucket was bound. */
+export function isStorageEnabled(env: Env): boolean {
+  return Boolean(env.DOCUMENTS);
+}
+
+/**
+ * QA-only hooks (used by scripts/lifecycleCheck.ts to backdate automation
+ * anchors) mount only when this is explicitly turned on. It is never set in
+ * production — see .dev.vars.example.
+ */
+export function areQaHooksEnabled(env: Env): boolean {
+  return env.QA_HOOKS_ENABLED === "true";
+}
+
+export function corsOrigins(env: Env): string[] {
+  return (env.CORS_ORIGIN ?? "")
+    .split(",")
+    .map((o) => o.trim())
+    .filter(Boolean);
+}
+
+export function mailFrom(env: Env): string {
+  return env.MAIL_FROM || "MiDigitalExpansion CRM <crm@midigitalexpansion.com>";
+}
+
+/**
+ * The R2 bucket's public origin, when it has one.
+ *
+ * Widened to `string` deliberately: `wrangler types` turns the empty default in
+ * wrangler.jsonc into the literal type `""`, which narrows to `never` the moment
+ * a caller checks it for emptiness.
+ */
+export function r2PublicBaseUrl(env: Env): string {
+  return (env.R2_PUBLIC_BASE_URL as string) ?? "";
+}

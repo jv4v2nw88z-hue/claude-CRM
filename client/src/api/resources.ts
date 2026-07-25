@@ -126,13 +126,15 @@ export const dealsApi = {
 export const documentsApi = {
   listForClient: (clientId: string) => api.get<Document[]>(`/clients/${clientId}/documents`),
   config: () => api.get<{ storageEnabled: boolean }>("/documents/config"),
-  requestUploadUrl: (clientId: string, fileName: string, contentType: string) =>
-    api.post<{ uploadUrl: string; storageKey: string; fileUrl: string }>(
-      `/clients/${clientId}/documents/upload-url`,
-      { fileName, contentType }
-    ),
-  confirm: (clientId: string, data: Record<string, unknown>) =>
-    api.post<Document>(`/clients/${clientId}/documents`, data),
+  // One request: the Worker streams the bytes into R2 and writes the row. R2 is
+  // reached through a binding rather than S3 credentials, so there is no
+  // presigned URL to hand the browser and no second confirm call.
+  upload: (clientId: string, file: File, category?: string | null) => {
+    const form = new FormData();
+    form.append("file", file);
+    if (category) form.append("category", category);
+    return api.postForm<Document>(`/clients/${clientId}/documents`, form);
+  },
   downloadUrl: (id: string) => api.get<{ url: string }>(`/documents/${id}/download-url`),
   remove: (id: string) => api.delete<void>(`/documents/${id}`),
 };
