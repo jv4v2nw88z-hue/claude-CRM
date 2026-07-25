@@ -20,6 +20,67 @@ const ANCHOR_LABELS: Record<RuleAnchor, string> = {
   RETAINER_END: "Retainer end date",
 };
 
+/**
+ * The pieces of a rule row, shared by the mobile list and the desktop table so
+ * the two presentations can never disagree about what a rule says.
+ */
+function RuleTrigger({ rule }: { rule: AutomationRule }) {
+  return (
+    <>
+      {rule.triggerTier ? (
+        <TierBadge tier={rule.triggerTier} />
+      ) : (
+        <span className="text-xs text-slate-500">Any tier</span>
+      )}
+      {rule.requiresActiveRetainer && (
+        <p className="mt-1 text-xs text-slate-400">Needs active retainer</p>
+      )}
+    </>
+  );
+}
+
+function RuleTiming({ rule }: { rule: AutomationRule }) {
+  return (
+    <>
+      {rule.repeatEveryDays ? (
+        <>every {rule.repeatEveryDays} days</>
+      ) : rule.daysAfterTrigger < 0 ? (
+        <>{Math.abs(rule.daysAfterTrigger)} days before</>
+      ) : (
+        <>{rule.daysAfterTrigger} days after</>
+      )}
+      <p className="text-xs text-slate-400">{ANCHOR_LABELS[rule.anchor]}</p>
+    </>
+  );
+}
+
+function RuleToggle({ rule, onToggle }: { rule: AutomationRule; onToggle: () => void }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={rule.isActive}
+      aria-label={`${rule.isActive ? "Disable" : "Enable"} ${rule.name}`}
+      onClick={onToggle}
+      // The switch itself stays 36x20 for visual weight; the padding around it
+      // is what makes the target 44px on touch.
+      className="inline-flex h-11 w-11 items-center justify-center lg:h-auto lg:w-auto"
+    >
+      <span
+        className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+          rule.isActive ? "bg-emerald-500" : "bg-slate-300"
+        }`}
+      >
+        <span
+          className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${
+            rule.isActive ? "translate-x-[1.15rem]" : "translate-x-1"
+          }`}
+        />
+      </span>
+    </button>
+  );
+}
+
 export function AutomationSettings() {
   const rulesQuery = useAutomationRules();
   const updateRule = useUpdateAutomationRule();
@@ -98,7 +159,74 @@ export function AutomationSettings() {
           action={<Button onClick={() => setCreating(true)}>Create a rule</Button>}
         />
       ) : (
-        <Card className="overflow-x-auto">
+        <>
+          {/*
+            This table's min-content width is ~890px: six columns, and the rule
+            name and template can't compress. On a 390px screen no amount of
+            overflow-x on the wrapper makes that readable — it just produces a
+            page that scrolls sideways. Small screens get a stacked list of the
+            same fields instead. The table starts at lg, not md: a tablet is
+            768px wide, still narrower than the table needs.
+          */}
+          <ul className="space-y-3 lg:hidden">
+            {rulesQuery.data?.map((rule) => (
+              <li key={rule.id} className={`card p-4 ${rule.isActive ? "" : "opacity-60"}`}>
+                <div className="flex items-start justify-between gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setEditing(rule)}
+                    className="min-h-11 flex-1 text-left text-sm font-medium text-slate-900"
+                  >
+                    {rule.name}
+                  </button>
+                  <RuleToggle
+                    rule={rule}
+                    onToggle={() =>
+                      updateRule.mutate({ id: rule.id, data: { isActive: !rule.isActive } })
+                    }
+                  />
+                </div>
+
+                <p className="text-xs text-slate-400">{rule.taskTitleTemplate}</p>
+
+                <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-sm">
+                  <div className="min-w-0">
+                    <dt className="text-xs text-slate-400">Trigger</dt>
+                    <dd className="mt-0.5">
+                      <RuleTrigger rule={rule} />
+                    </dd>
+                  </div>
+                  <div className="min-w-0">
+                    <dt className="text-xs text-slate-400">Timing</dt>
+                    <dd className="mt-0.5 text-slate-600">
+                      <RuleTiming rule={rule} />
+                    </dd>
+                  </div>
+                  <div className="min-w-0">
+                    <dt className="text-xs text-slate-400">Task type</dt>
+                    <dd className="mt-0.5 text-slate-600">{TASK_TYPE_LABELS[rule.taskType]}</dd>
+                  </div>
+                  <div className="min-w-0">
+                    <dt className="text-xs text-slate-400">Tasks generated</dt>
+                    <dd className="mt-0.5 text-slate-600">{rule._count?.generatedTasks ?? 0}</dd>
+                  </div>
+                </dl>
+
+                <div className="mt-3 flex justify-end border-t border-slate-100 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setConfirmDelete(rule)}
+                    className="inline-flex min-h-11 items-center gap-1.5 rounded-lg px-3 text-sm font-medium text-slate-500 hover:bg-red-50 hover:text-red-600"
+                  >
+                    <Trash2 className="h-4 w-4" aria-hidden />
+                    Delete
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+
+          <Card className="hidden overflow-x-auto lg:block">
           <table className="w-full text-left text-sm">
             <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
               <tr>
@@ -121,7 +249,12 @@ export function AutomationSettings() {
                     >
                       {rule.name}
                     </button>
-                    <p className="mt-0.5 max-w-md truncate text-xs text-slate-400">
+                    {/* line-clamp rather than truncate: `truncate` sets
+                        white-space:nowrap, so the cell's min-content width
+                        becomes the full template string and the column refuses
+                        to compress. Clamping to one line ellipsises the same way
+                        while letting the column shrink. */}
+                    <p className="mt-0.5 line-clamp-1 max-w-md text-xs text-slate-400">
                       {rule.taskTitleTemplate}
                     </p>
                     {(rule._count?.generatedTasks ?? 0) > 0 && (
@@ -133,65 +266,40 @@ export function AutomationSettings() {
                   </td>
 
                   <td className="px-4 py-3">
-                    {rule.triggerTier ? (
-                      <TierBadge tier={rule.triggerTier} />
-                    ) : (
-                      <span className="text-xs text-slate-500">Any tier</span>
-                    )}
-                    {rule.requiresActiveRetainer && (
-                      <p className="mt-1 text-xs text-slate-400">Needs active retainer</p>
-                    )}
+                    <RuleTrigger rule={rule} />
                   </td>
 
                   <td className="px-4 py-3 text-slate-600">
-                    {rule.repeatEveryDays ? (
-                      <>every {rule.repeatEveryDays} days</>
-                    ) : rule.daysAfterTrigger < 0 ? (
-                      <>{Math.abs(rule.daysAfterTrigger)} days before</>
-                    ) : (
-                      <>{rule.daysAfterTrigger} days after</>
-                    )}
-                    <p className="text-xs text-slate-400">{ANCHOR_LABELS[rule.anchor]}</p>
+                    <RuleTiming rule={rule} />
                   </td>
 
                   <td className="px-4 py-3 text-slate-600">{TASK_TYPE_LABELS[rule.taskType]}</td>
 
                   <td className="px-4 py-3 text-center">
-                    <button
-                      type="button"
-                      role="switch"
-                      aria-checked={rule.isActive}
-                      aria-label={`${rule.isActive ? "Disable" : "Enable"} ${rule.name}`}
-                      onClick={() =>
+                    <RuleToggle
+                      rule={rule}
+                      onToggle={() =>
                         updateRule.mutate({ id: rule.id, data: { isActive: !rule.isActive } })
                       }
-                      className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
-                        rule.isActive ? "bg-emerald-500" : "bg-slate-300"
-                      }`}
-                    >
-                      <span
-                        className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${
-                          rule.isActive ? "translate-x-[1.15rem]" : "translate-x-1"
-                        }`}
-                      />
-                    </button>
+                    />
                   </td>
 
                   <td className="px-4 py-3 text-right">
                     <button
                       type="button"
                       onClick={() => setConfirmDelete(rule)}
-                      className="rounded p-1 text-slate-300 hover:bg-red-50 hover:text-red-600"
+                      className="rounded p-2 text-slate-300 hover:bg-red-50 hover:text-red-600"
                       aria-label={`Delete ${rule.name}`}
                     >
-                      <Trash2 className="h-4 w-4" />
+                      <Trash2 className="h-4 w-4" aria-hidden />
                     </button>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
-        </Card>
+          </Card>
+        </>
       )}
 
       <RulePanel

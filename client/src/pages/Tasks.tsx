@@ -101,7 +101,7 @@ export function Tasks() {
             type="checkbox"
             checked={showCompleted}
             onChange={(e) => setShowCompleted(e.target.checked)}
-            className="h-3.5 w-3.5 rounded border-slate-300 text-brand-700"
+            className="h-4 w-4 rounded border-slate-300 text-brand-700"
           />
           Show completed
         </label>
@@ -159,7 +159,7 @@ function ToggleGroup<T extends string>({
             onClick={() => onChange(option.value)}
             aria-pressed={value === option.value}
             className={clsx(
-              "rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
+              "inline-flex min-h-8 items-center rounded-md px-2.5 py-1 text-xs font-medium transition-colors lg:min-h-0",
               value === option.value
                 ? "bg-brand-700 text-white"
                 : "text-slate-600 hover:bg-slate-100"

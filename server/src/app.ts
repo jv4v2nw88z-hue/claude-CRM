@@ -85,5 +85,36 @@ export function createApp() {
 
   app.onError((err, c) => toErrorResponse(err, c));
 
+  /**
+   * Last-resort SPA fallback.
+   *
+   * In a correct deployment nothing non-API reaches here: `run_worker_first:
+   * ["/api/*"]` means the asset router answers every other path, and its
+   * `not_found_handling: "single-page-application"` hands unknown paths to
+   * index.html for React Router. But that leaves the Worker's behaviour
+   * dependent on deploy-time configuration it cannot see, and when the Worker
+   * *is* reached first, Hono's default 404 for `/` renders as a blank page —
+   * indistinguishable, from the browser, from a broken build.
+   *
+   * Serving index.html ourselves makes the app boot regardless of how the asset
+   * router is configured. `/api/*` is already answered above, so it never gets
+   * here and API 404s stay JSON.
+   */
+  app.notFound(async (c) => {
+    const assets = (c.env as { ASSETS?: Fetcher }).ASSETS;
+    if (!assets) return c.json({ error: "Route not found" }, 404);
+
+    const url = new URL(c.req.url);
+    const asset = await assets.fetch(new Request(url.toString(), { headers: c.req.raw.headers }));
+    if (asset.status !== 404) return asset;
+
+    // A client-side route rather than a real file: hand back the shell.
+    const shell = await assets.fetch(new Request(new URL("/index.html", url).toString()));
+    return new Response(shell.body, {
+      status: shell.ok ? 200 : 404,
+      headers: shell.headers,
+    });
+  });
+
   return app;
 }

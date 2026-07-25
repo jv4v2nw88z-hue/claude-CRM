@@ -33,15 +33,23 @@ export function TaskChecklistItem({
             : "border-slate-200 bg-white hover:border-slate-300"
       )}
     >
-      <input
-        type="checkbox"
-        checked={done}
-        disabled={disabled || done}
-        onChange={() => onComplete(task.id)}
-        aria-label={`Mark "${task.title}" done`}
-        className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer rounded border-slate-300 text-brand-700
-                   focus:ring-brand-500 disabled:cursor-default"
-      />
+      {/* The box stays visually small, but the label around it is a 44px target
+          on touch — completing a task is the single most-tapped action here.
+          Negative margins keep the row the same height as before. */}
+      <label
+        className="-my-1.5 -ml-1.5 flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center
+                   lg:-my-0 lg:-ml-0 lg:mt-0.5 lg:h-4 lg:w-4"
+      >
+        <input
+          type="checkbox"
+          checked={done}
+          disabled={disabled || done}
+          onChange={() => onComplete(task.id)}
+          aria-label={`Mark "${task.title}" done`}
+          className="h-5 w-5 cursor-pointer rounded border-slate-300 text-brand-700
+                     focus:ring-brand-500 disabled:cursor-default lg:h-4 lg:w-4"
+        />
+      </label>
 
       <div className="min-w-0 flex-1">
         <div className="flex items-start gap-1.5">
@@ -88,10 +96,17 @@ export function TaskChecklistItem({
           onClick={() => onSnooze(task.id)}
           title="Snooze one week"
           aria-label={`Snooze "${task.title}" one week`}
-          className="shrink-0 rounded p-1 text-slate-300 opacity-0 transition-opacity hover:bg-slate-100
-                     hover:text-slate-600 focus-visible:opacity-100 group-hover:opacity-100"
+          // Reveal-on-hover hid this button completely on touch, where there is
+          // no hover to trigger it — so snoozing was desktop-only. It now stays
+          // visible by default and only hides behind hover where hover exists.
+          className="-my-1.5 -mr-1.5 flex h-11 w-11 shrink-0 items-center justify-center rounded
+                     text-slate-300 transition-opacity hover:bg-slate-100 hover:text-slate-600
+                     lg:-my-0 lg:-mr-0 lg:h-8 lg:w-8
+                     [@media(any-hover:hover)]:opacity-0
+                     [@media(any-hover:hover)]:focus-visible:opacity-100
+                     [@media(any-hover:hover)]:group-hover:opacity-100"
         >
-          <Clock className="h-4 w-4" />
+          <Clock className="h-4 w-4" aria-hidden />
         </button>
       )}
     </li>

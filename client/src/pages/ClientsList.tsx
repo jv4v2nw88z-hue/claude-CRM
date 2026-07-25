@@ -79,7 +79,7 @@ export function ClientsList() {
             type="button"
             onClick={() => setAtRiskOnly((v) => !v)}
             className={clsx(
-              "inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
+              "inline-flex min-h-9 items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors lg:min-h-0",
               atRiskOnly
                 ? "border-amber-300 bg-amber-100 text-amber-900"
                 : "border-slate-300 bg-white text-slate-600 hover:bg-slate-50"
@@ -239,7 +239,9 @@ function FilterPill({
       onClick={onClick}
       aria-pressed={active}
       className={clsx(
-        "rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+        // 36px on touch keeps the tier pills comfortably tappable without making
+        // the desktop filter row feel oversized.
+        "inline-flex min-h-9 items-center rounded-full border px-3 py-1 text-xs font-medium transition-colors lg:min-h-0",
         active
           ? "border-brand-700 bg-brand-700 text-white"
           : "border-slate-300 bg-white text-slate-600 hover:bg-slate-50"

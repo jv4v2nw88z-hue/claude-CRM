@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import {
   DndContext,
   DragOverlay,
+  KeyboardSensor,
   PointerSensor,
   useSensor,
   useSensors,
@@ -39,7 +40,12 @@ export function Deals() {
   const [converting, setConverting] = useState<Deal | null>(null);
 
   // A little travel before a drag starts, so tapping a card on mobile still opens it.
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
+  // KeyboardSensor makes the board operable without a pointer at all: focus a
+  // grip, Space to lift, arrows to move, Space to drop.
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(KeyboardSensor)
+  );
 
   const dealsByStage = useMemo(() => {
     const map = new Map<DealStage, Deal[]>(STAGES.map((s) => [s, []]));

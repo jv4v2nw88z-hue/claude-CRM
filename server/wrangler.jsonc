@@ -1,6 +1,11 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "midigitalexpansion-crm",
+  // Matches the Worker that actually exists in the account. The dashboard
+  // derived it from the repository name (claude-CRM -> claudecrm) when the Git
+  // build was connected, and that is the Worker serving the live URL — a
+  // different name here would deploy a *second*, empty Worker alongside it and
+  // leave the real one untouched.
+  "name": "claudecrm",
   "main": "src/index.ts",
   "compatibility_date": "2026-07-01",
   "compatibility_flags": ["nodejs_compat"],

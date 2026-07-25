@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { NavLink, Outlet } from "react-router-dom";
+import { useEffect, useRef, useState } from "react";
+import { NavLink, Outlet, useLocation } from "react-router-dom";
 import clsx from "clsx";
 import {
   BarChart3,
@@ -28,6 +28,34 @@ const NAV_ITEMS = [
 export function Layout() {
   const { user, logout } = useAuth();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const location = useLocation();
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
+
+  // Close on route change so a back-navigation never leaves the drawer covering
+  // the page it navigated to.
+  useEffect(() => setMobileNavOpen(false), [location.pathname]);
+
+  // Escape closes it, focus moves into it, and the page behind stops scrolling —
+  // the three things a hand-rolled drawer usually forgets.
+  useEffect(() => {
+    if (!mobileNavOpen) return;
+
+    closeButtonRef.current?.focus();
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMobileNavOpen(false);
+    };
+    document.addEventListener("keydown", onKeyDown);
+
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      document.body.style.overflow = previousOverflow;
+      menuButtonRef.current?.focus();
+    };
+  }, [mobileNavOpen]);
 
   const nav = (
     <nav className="flex flex-col gap-0.5">
@@ -39,7 +67,9 @@ export function Layout() {
           onClick={() => setMobileNavOpen(false)}
           className={({ isActive }) =>
             clsx(
-              "flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+              // min-h-11 gives a 44px touch target in the mobile drawer; the
+              // desktop sidebar is mouse-driven and can stay compact.
+              "flex min-h-11 items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors lg:min-h-9",
               isActive
                 ? "bg-brand-700 text-white"
                 : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
@@ -58,12 +88,15 @@ export function Layout() {
       {/* Mobile top bar — Cole updates things from his phone after calls. */}
       <header className="sticky top-0 z-30 flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3 lg:hidden">
         <button
+          ref={menuButtonRef}
           type="button"
           onClick={() => setMobileNavOpen(true)}
-          className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100"
+          className="-ml-2 flex h-11 w-11 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100"
           aria-label="Open navigation"
+          aria-expanded={mobileNavOpen}
+          aria-controls="mobile-nav"
         >
-          <Menu className="h-5 w-5" />
+          <Menu className="h-5 w-5" aria-hidden />
         </button>
         <span className="text-sm font-semibold text-slate-900">MiDigitalExpansion</span>
         {user && <Avatar label={initials(user.name)} className="h-7 w-7" />}
@@ -76,19 +109,31 @@ export function Layout() {
             onClick={() => setMobileNavOpen(false)}
             aria-hidden
           />
-          <div className="relative h-full w-64 animate-slide-in bg-white p-4 shadow-xl">
+          <div
+            id="mobile-nav"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Navigation"
+            className="relative flex h-full w-72 max-w-[85vw] animate-slide-in flex-col bg-white p-4 shadow-xl"
+          >
             <div className="mb-4 flex items-center justify-between">
               <Brand />
               <button
+                ref={closeButtonRef}
                 type="button"
                 onClick={() => setMobileNavOpen(false)}
-                className="rounded-lg p-1 text-slate-400 hover:bg-slate-100"
+                className="-mr-2 flex h-11 w-11 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100"
                 aria-label="Close navigation"
               >
-                <X className="h-5 w-5" />
+                <X className="h-5 w-5" aria-hidden />
               </button>
             </div>
-            {nav}
+
+            <div className="flex-1 overflow-y-auto">{nav}</div>
+
+            {/* Log out used to live only in the desktop sidebar, which left no way
+                to sign out on a phone — the device this gets used on most. */}
+            {user && <UserFooter user={user} onLogout={logout} />}
           </div>
         </div>
       )}
@@ -100,33 +145,42 @@ export function Layout() {
 
           <div className="mt-6 flex-1">{nav}</div>
 
-          {user && (
-            <div className="border-t border-slate-200 pt-3">
-              <div className="flex items-center gap-2.5 px-1">
-                <Avatar label={initials(user.name)} />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium text-slate-900">{user.name}</p>
-                  <p className="truncate text-xs capitalize text-slate-500">
-                    {user.role.toLowerCase()}
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => void logout()}
-                className="mt-2 flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-900"
-              >
-                <LogOut className="h-4 w-4" aria-hidden />
-                Log out
-              </button>
-            </div>
-          )}
+          {user && <UserFooter user={user} onLogout={logout} />}
         </aside>
 
         <main className="min-w-0 flex-1 px-4 py-5 sm:px-6 lg:px-8 lg:py-8">
           <Outlet />
         </main>
       </div>
+    </div>
+  );
+}
+
+/** Shared by the desktop sidebar and the mobile drawer so the two can't drift. */
+function UserFooter({
+  user,
+  onLogout,
+}: {
+  user: { name: string; role: string };
+  onLogout: () => Promise<void>;
+}) {
+  return (
+    <div className="border-t border-slate-200 pt-3">
+      <div className="flex items-center gap-2.5 px-1">
+        <Avatar label={initials(user.name)} />
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-medium text-slate-900">{user.name}</p>
+          <p className="truncate text-xs capitalize text-slate-500">{user.role.toLowerCase()}</p>
+        </div>
+      </div>
+      <button
+        type="button"
+        onClick={() => void onLogout()}
+        className="mt-2 flex min-h-11 w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-900 lg:min-h-9"
+      >
+        <LogOut className="h-4 w-4" aria-hidden />
+        Log out
+      </button>
     </div>
   );
 }

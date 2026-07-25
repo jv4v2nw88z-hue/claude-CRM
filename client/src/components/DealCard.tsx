@@ -32,7 +32,11 @@ export function DealCard({ deal, onOpen, isOverlay = false }: DealCardProps) {
       <div className="flex items-start gap-2">
         <button
           type="button"
-          className="mt-0.5 shrink-0 cursor-grab touch-none rounded text-slate-300 hover:text-slate-500 active:cursor-grabbing"
+          // A 16px grip is hard to hit with a thumb and it is the only way to
+          // move a deal between stages, so the target is 44px on touch.
+          className="-my-1.5 -ml-1.5 flex h-11 w-11 shrink-0 cursor-grab touch-none items-center
+                     justify-center rounded text-slate-300 hover:text-slate-500
+                     active:cursor-grabbing lg:-my-0 lg:-ml-0 lg:mt-0.5 lg:h-6 lg:w-6"
           aria-label={`Drag ${deal.businessName}`}
           {...listeners}
           {...attributes}

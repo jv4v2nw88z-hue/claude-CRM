@@ -1,3 +1,4 @@
+import { Suspense, lazy } from "react";
 import { Link } from "react-router-dom";
 import { AlertCircle, CalendarClock, DollarSign, Users } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
@@ -5,10 +6,19 @@ import { useCompleteTask, useDashboardSummary, useTasks, useUpdateTask } from ".
 import { formatCurrency } from "../lib/format";
 import { AtRiskPanel } from "../components/AtRiskPanel";
 import { InteractionTimelineItem } from "../components/InteractionTimelineItem";
-import { MRRTrendChart } from "../components/MRRTrendChart";
 import { StatCard } from "../components/StatCard";
 import { TaskChecklist } from "../components/TaskChecklist";
 import { Card, EmptyState, ErrorNotice, SectionHeading, Skeleton } from "../components/ui";
+
+/**
+ * recharts is ~105 KB gzipped — more than the rest of this page put together,
+ * for one chart that sits below the numbers everyone actually opens the
+ * dashboard to read. Deferring it lets the MRR figure, the at-risk panel and
+ * today's tasks paint without waiting on the charting library.
+ */
+const MRRTrendChart = lazy(() =>
+  import("../components/MRRTrendChart").then((m) => ({ default: m.MRRTrendChart }))
+);
 
 export function Dashboard() {
   const { user } = useAuth();
@@ -132,7 +142,9 @@ export function Dashboard() {
             {summaryQuery.isLoading ? (
               <Skeleton className="h-[220px]" />
             ) : (
-              <MRRTrendChart data={summary?.mrrTrend} />
+              <Suspense fallback={<Skeleton className="h-[220px]" />}>
+                <MRRTrendChart data={summary?.mrrTrend} />
+              </Suspense>
             )}
           </Card>
 

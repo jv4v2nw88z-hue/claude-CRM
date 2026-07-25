@@ -1,16 +1,41 @@
-import { Component, type ErrorInfo, type ReactNode } from "react";
+import { Component, Suspense, lazy, type ErrorInfo, type ReactNode } from "react";
 import { Navigate, Outlet, Route, Routes } from "react-router-dom";
 import { useAuth } from "./context/AuthContext";
 import { Layout } from "./components/Layout";
-import { AutomationSettings } from "./pages/AutomationSettings";
-import { ClientDetail } from "./pages/ClientDetail";
-import { ClientsList } from "./pages/ClientsList";
-import { Dashboard } from "./pages/Dashboard";
-import { Deals } from "./pages/Deals";
 import { Login } from "./pages/Login";
-import { Revenue } from "./pages/Revenue";
-import { Tasks } from "./pages/Tasks";
 import { Button } from "./components/ui";
+
+/**
+ * Pages load on demand.
+ *
+ * Eagerly importing all eight put the whole app — including recharts and
+ * @dnd-kit, which only two pages use — into one ~740 KB bundle that every
+ * visitor downloaded before seeing the login form. That is the wrong trade on a
+ * phone on cell data, which is where half this app's use happens. Login stays
+ * eager because it is always the first paint for a signed-out user.
+ */
+const Dashboard = lazy(() => import("./pages/Dashboard").then((m) => ({ default: m.Dashboard })));
+const ClientsList = lazy(() =>
+  import("./pages/ClientsList").then((m) => ({ default: m.ClientsList }))
+);
+const ClientDetail = lazy(() =>
+  import("./pages/ClientDetail").then((m) => ({ default: m.ClientDetail }))
+);
+const Deals = lazy(() => import("./pages/Deals").then((m) => ({ default: m.Deals })));
+const Tasks = lazy(() => import("./pages/Tasks").then((m) => ({ default: m.Tasks })));
+const Revenue = lazy(() => import("./pages/Revenue").then((m) => ({ default: m.Revenue })));
+const AutomationSettings = lazy(() =>
+  import("./pages/AutomationSettings").then((m) => ({ default: m.AutomationSettings }))
+);
+
+/** Matches the auth spinner, so a chunk fetch looks like any other short wait. */
+function RouteFallback() {
+  return (
+    <div className="flex min-h-[60vh] items-center justify-center">
+      <div className="h-6 w-6 animate-spin rounded-full border-2 border-slate-200 border-t-brand-700" />
+    </div>
+  );
+}
 
 function RequireAuth() {
   const { user, isLoading } = useAuth();
@@ -35,13 +60,22 @@ export default function App() {
 
         <Route element={<RequireAuth />}>
           <Route element={<Layout />}>
-            <Route index element={<Dashboard />} />
-            <Route path="clients" element={<ClientsList />} />
-            <Route path="clients/:id" element={<ClientDetail />} />
-            <Route path="deals" element={<Deals />} />
-            <Route path="tasks" element={<Tasks />} />
-            <Route path="revenue" element={<Revenue />} />
-            <Route path="settings/automations" element={<AutomationSettings />} />
+            {/* Inside Layout, so the nav stays put while a page chunk loads. */}
+            <Route
+              element={
+                <Suspense fallback={<RouteFallback />}>
+                  <Outlet />
+                </Suspense>
+              }
+            >
+              <Route index element={<Dashboard />} />
+              <Route path="clients" element={<ClientsList />} />
+              <Route path="clients/:id" element={<ClientDetail />} />
+              <Route path="deals" element={<Deals />} />
+              <Route path="tasks" element={<Tasks />} />
+              <Route path="revenue" element={<Revenue />} />
+              <Route path="settings/automations" element={<AutomationSettings />} />
+            </Route>
           </Route>
         </Route>
 

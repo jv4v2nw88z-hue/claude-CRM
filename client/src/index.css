@@ -24,10 +24,12 @@
     @apply rounded-xl border border-slate-200 bg-white shadow-sm;
   }
 
+  /* min-h-11 keeps every text field a comfortable 44px on touch; the desktop
+     breakpoint drops back to the tighter 38px the forms were designed around. */
   .input {
-    @apply w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900
+    @apply min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900
            placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500
-           disabled:cursor-not-allowed disabled:bg-slate-50;
+           disabled:cursor-not-allowed disabled:bg-slate-50 lg:min-h-0;
   }
 
   .label {

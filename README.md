@@ -235,6 +235,40 @@ The spec's `AutomationRule` model covers the four tier-based rules but can't exp
 
 ---
 
+### Desktop and mobile
+
+The primary target is a laptop browser, but Cole updates records from his phone
+after calls, so both are treated as real. Three rules keep them honest:
+
+**Touch targets are 44px below `lg`, compact above it.** The pattern is
+`min-h-11 lg:min-h-9`, or a 44px wrapper around a visually small control — the
+task checkbox and the deal drag handle both stay their original size while their
+hit area grows. `lg`, not `md`: a tablet is a touch device.
+
+**Nothing important hides behind `:hover`.** Reveal-on-hover controls silently do
+not exist on touch. The snooze button was `opacity-0 group-hover:opacity-100`,
+which made snoozing desktop-only; it is now visible by default and only hides
+behind hover inside `@media (any-hover: hover)`.
+
+**Wide tables become lists, not sideways scroll.** The automation rules table has
+a ~890px min-content width, and no `overflow-x` wrapper makes that usable at
+390px — it just produces a page that scrolls sideways. Below `lg` the same fields
+render as a stacked list; the table returns when it fits. Both presentations
+share the cell components so they cannot disagree.
+
+Verified by an instrumented pass over every route at 390/768/1440: no horizontal
+document overflow, no element escaping the viewport, no unlabelled inputs.
+
+### Bundle size
+
+Pages load on demand. Importing all eight eagerly put recharts and @dnd-kit —
+used by two pages — into a single ~740 KB bundle that every visitor downloaded
+before seeing the login form. Route-level `lazy` plus deferring the dashboard
+chart brings first load to ~220 KB (70 KB gzipped), with recharts' ~105 KB
+arriving only when a chart actually renders.
+
+---
+
 ## What the Cloudflare platform decides for you
 
 These are the places where running on Workers/D1 changed a design decision, not just the deployment target.
@@ -266,6 +300,8 @@ npm run qa:lifecycle     # end-to-end, needs `npm run dev:server` running
 ```
 
 `qa:lifecycle` drives a throwaway client through the entire ladder — deal → convert → Website Build → Live → Brand → Social → Analytics → churn — backdating anchors so every automation rule fires, asserting MRR moves exactly when retainer status says it should, and round-tripping a document through R2. It cleans up after itself.
+
+Two of the 31 assertions are the R2 document round-trip and are skipped when no bucket is bound, so the expected result is **29 passed** until R2 is enabled.
 
 It runs entirely over HTTP against the real API. The two operations the public API genuinely cannot express (backdating a tier-history row, hard-deleting a client) go through QA-only hooks at `/api/qa`, which mount **only** when `QA_HOOKS_ENABLED=true` — set in `.dev.vars`, never in production.
 

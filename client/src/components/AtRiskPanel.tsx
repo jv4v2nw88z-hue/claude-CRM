@@ -76,8 +76,10 @@ export function AtRiskPanel({ atRisk, isLoading }: AtRiskPanelProps) {
                 onClick={() =>
                   setPitching({ clientId: client.clientId, businessName: client.businessName })
                 }
-                className="shrink-0 rounded-lg bg-amber-600 px-3 py-1.5 text-sm font-medium text-white
-                           hover:bg-amber-700"
+                // The whole point of this panel is that pitching takes one tap,
+                // so this is the last control that should be fiddly on a phone.
+                className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-lg bg-amber-600
+                           px-4 py-1.5 text-sm font-medium text-white hover:bg-amber-700 lg:min-h-9"
               >
                 Pitch Now
               </button>
