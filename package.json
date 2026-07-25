@@ -15,6 +15,7 @@
     "seed:local": "npm run seed:local --prefix server",
     "seed:remote": "npm run seed:remote --prefix server",
     "deploy": "npm run build --prefix client && npm run deploy --prefix server",
+    "cf:build": "npm ci --prefix server && npm ci --prefix client && npm run build --prefix client && npm run codegen --prefix server",
     "qa:lifecycle": "npm run qa:lifecycle --prefix server"
   }
 }

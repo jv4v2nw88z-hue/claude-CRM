@@ -88,6 +88,38 @@ Password: `changeme123` (override with a `SEED_PASSWORD` secret). **Change it af
 
 The 6am automation job needs no further setup — `triggers.crons` in `wrangler.jsonc` registers it on deploy.
 
+### Deploying from Git instead (Workers Builds)
+
+To have Cloudflare build and deploy on every push, connect the repo under
+**Workers & Pages → your Worker → Settings → Builds** and set:
+
+| Field | Value |
+|---|---|
+| Root directory | `/` (leave it at the repo root) |
+| Build command | `npm run cf:build` |
+| Deploy command | `npx wrangler deploy --config server/wrangler.jsonc` |
+
+Both fields matter. The root of this repo is a workspace, not a Worker — there's
+no `wrangler.jsonc` here — so a bare `npx wrangler deploy` finds no config, falls
+back to looking for a static-site directory, and fails with *"Could not detect a
+directory containing static files"*. `--config` points it at `server/`, from
+where it resolves `main`, `../client/dist` and `migrations/` correctly.
+
+`cf:build` installs both workspaces from their lockfiles, builds the React app
+into `client/dist`, and runs `prisma generate` — that last step is not optional,
+because the generated client is gitignored and the Worker won't bundle without it.
+
+Steps 1–3 above still have to happen first, and the **`database_id` must be
+committed**: builds deploy what's in Git, so the placeholder in
+`server/wrangler.jsonc` will fail the deploy until the real id is pushed. Set
+secrets on the Worker itself (**Settings → Variables and Secrets**, or
+`wrangler secret put`) — they are not build-time variables, and `cf:build` never
+sees them.
+
+Migrations are deliberately *not* part of the build. Schema changes apply from a
+workstation with `npm run migrate:remote`, so a deploy can never silently rewrite
+the only copy of the client database.
+
 ### Optional: a custom domain
 
 Add a route to `wrangler.jsonc` and redeploy:
