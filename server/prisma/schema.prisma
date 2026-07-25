@@ -107,6 +107,9 @@ model Contact {
   email     String?
   phone     String?
   isPrimary Boolean  @default(false)
+  /// Soft delete. Contacts used to be removed outright, which destroyed the only
+  /// record of who the relationship actually ran through.
+  isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
 
   @@index([clientId])
@@ -126,6 +129,9 @@ model Retainer {
   endDate       DateTime?
   billingDay    Int? // day of month invoice goes out, 1-28
   notes         String?
+  /// Soft delete. A deleted retainer is revenue history; dropping the row makes
+  /// past MRR unreconstructable, which is the one thing the trend chart needs.
+  isActive      Boolean   @default(true)
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 

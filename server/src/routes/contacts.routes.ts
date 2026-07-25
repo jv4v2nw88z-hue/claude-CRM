@@ -9,7 +9,7 @@ export const clientContactsRouter = new Hono<AppEnv>();
 
 clientContactsRouter.get("/", async (c) => {
   const contacts = await c.get("prisma").contact.findMany({
-    where: { clientId: requireParam(c, "clientId") },
+    where: { clientId: requireParam(c, "clientId"), isActive: true },
     orderBy: [{ isPrimary: "desc" }, { lastName: "asc" }],
   });
   return c.json(contacts);
@@ -51,8 +51,15 @@ contactsRouter.patch("/:id", async (c) => {
   return c.json(contact);
 });
 
+/*
+ * Soft delete, matching Client. A hard delete destroyed the only record of who
+ * the relationship ran through — and the person who left the company is exactly
+ * the contact you need when the account goes quiet a year later.
+ */
 contactsRouter.delete("/:id", async (c) => {
-  await c.get("prisma").contact.delete({ where: { id: c.req.param("id") } });
+  await c
+    .get("prisma")
+    .contact.update({ where: { id: c.req.param("id") }, data: { isActive: false } });
   return c.body(null, 204);
 });
 
@@ -67,3 +74,11 @@ async function demoteOtherPrimaries(
     data: { isPrimary: false },
   });
 }
+
+/* Undo for the soft delete above. Open to both roles — see clients.routes.ts. */
+contactsRouter.post("/:id/restore", async (c) => {
+  const contact = await c
+    .get("prisma")
+    .contact.update({ where: { id: c.req.param("id") }, data: { isActive: true } });
+  return c.json(contact);
+});

@@ -104,6 +104,21 @@ export function useDeleteClient() {
   return useMutation({ mutationFn: (id: string) => clientsApi.remove(id), onSuccess: invalidate });
 }
 
+/** Undoes a soft-deleted retainer. Drives the undo toast on ClientDetail. */
+export function useRestoreRetainer() {
+  const invalidate = useInvalidateAll();
+  return useMutation({
+    mutationFn: (id: string) => retainersApi.restore(id),
+    onSuccess: invalidate,
+  });
+}
+
+/** Undoes a soft delete. Drives the undo toast and the Archived view. */
+export function useRestoreClient() {
+  const invalidate = useInvalidateAll();
+  return useMutation({ mutationFn: (id: string) => clientsApi.restore(id), onSuccess: invalidate });
+}
+
 // ---------------------------
 // Contacts
 // ---------------------------

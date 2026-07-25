@@ -22,6 +22,7 @@ import {
   useCreateTask,
   useDeleteDocument,
   useDeleteRetainer,
+  useRestoreRetainer,
   useDocumentConfig,
   useLogInteraction,
   useUpdateClient,
@@ -47,6 +48,7 @@ import {
   toDateInputValue,
 } from "../lib/format";
 import { ConfirmModal } from "../components/ConfirmModal";
+import { UndoToast } from "../components/UndoToast";
 import { InteractionTimelineItem } from "../components/InteractionTimelineItem";
 import { SlideOverPanel } from "../components/SlideOverPanel";
 import { TaskChecklist } from "../components/TaskChecklist";
@@ -591,7 +593,10 @@ const RETAINER_STATUS_LABELS: Record<RetainerStatus, string> = {
 function RetainersTab({ client, onAdd }: { client: ClientDetailType; onAdd: () => void }) {
   const updateRetainer = useUpdateRetainer();
   const deleteRetainer = useDeleteRetainer();
+  const restoreRetainer = useRestoreRetainer();
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  /** Set after a delete so the toast can put it back. */
+  const [undoId, setUndoId] = useState<string | null>(null);
 
   return (
     <Card className="p-5">
@@ -681,13 +686,28 @@ function RetainersTab({ client, onAdd }: { client: ClientDetailType; onAdd: () =
         tone="danger"
         confirmLabel="Delete"
         loading={deleteRetainer.isPending}
-        body="This removes it from MRR history entirely. If the client simply stopped paying, set the status to Cancelled instead so the revenue history stays accurate."
+        body="It stops counting toward MRR and disappears from this client. The row is kept, so this can be undone. If the client simply stopped paying, set the status to Cancelled instead — that keeps it visible in revenue history."
         onConfirm={async () => {
-          if (confirmDelete) await deleteRetainer.mutateAsync(confirmDelete);
+          if (confirmDelete) {
+            await deleteRetainer.mutateAsync(confirmDelete);
+            setUndoId(confirmDelete);
+          }
           setConfirmDelete(null);
         }}
         onCancel={() => setConfirmDelete(null)}
       />
+
+      {undoId && (
+        <UndoToast
+          message="Retainer deleted."
+          isUndoing={restoreRetainer.isPending}
+          onUndo={async () => {
+            await restoreRetainer.mutateAsync(undoId);
+            setUndoId(null);
+          }}
+          onDismiss={() => setUndoId(null)}
+        />
+      )}
     </Card>
   );
 }

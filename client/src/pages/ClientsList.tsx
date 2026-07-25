@@ -1,10 +1,11 @@
 import { useMemo, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import clsx from "clsx";
-import { AlertTriangle, Building2, Plus, Search } from "lucide-react";
+import { AlertTriangle, Archive, Building2, Plus, Search } from "lucide-react";
 import {
   useClients,
   useCreateClient,
+  useRestoreClient,
   useUsers,
 } from "../hooks/queries";
 import type { ServiceTierType } from "../types";
@@ -18,6 +19,7 @@ export function ClientsList() {
   const [search, setSearch] = useState("");
   const [tiers, setTiers] = useState<ServiceTierType[]>([]);
   const [atRiskOnly, setAtRiskOnly] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
   const [creating, setCreating] = useState(false);
 
   const filters = useMemo(
@@ -25,12 +27,14 @@ export function ClientsList() {
       search: search.trim() || undefined,
       tier: tiers.length > 0 ? tiers.join(",") : undefined,
       atRisk: atRiskOnly || undefined,
+      archived: showArchived || undefined,
     }),
-    [search, tiers, atRiskOnly]
+    [search, tiers, atRiskOnly, showArchived]
   );
 
   const clientsQuery = useClients(filters);
   const clients = clientsQuery.data ?? [];
+  const restoreClient = useRestoreClient();
 
   const toggleTier = (tier: ServiceTierType) => {
     setTiers((current) =>
@@ -89,6 +93,23 @@ export function ClientsList() {
             <AlertTriangle className="h-3.5 w-3.5" aria-hidden />
             At risk only
           </button>
+
+          {/* Archived is the recovery path for an accidental delete — without it
+              a soft-deleted client is invisible and unreachable in the product. */}
+          <button
+            type="button"
+            onClick={() => setShowArchived((v) => !v)}
+            className={clsx(
+              "inline-flex min-h-9 items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors lg:min-h-0",
+              showArchived
+                ? "border-accent/40 bg-accent/10 text-accent"
+                : "border-separator bg-content text-ink/70 hover:bg-fill/8"
+            )}
+            aria-pressed={showArchived}
+          >
+            <Archive className="h-3.5 w-3.5" aria-hidden />
+            Archived
+          </button>
         </div>
 
         <div className="flex flex-wrap gap-1.5">
@@ -120,14 +141,18 @@ export function ClientsList() {
         <EmptyState
           icon={<Building2 className="h-8 w-8" />}
           title={
-            search || tiers.length > 0 || atRiskOnly
-              ? "No clients match these filters"
-              : "No clients yet"
+            showArchived
+              ? "Nothing archived"
+              : search || tiers.length > 0 || atRiskOnly
+                ? "No clients match these filters"
+                : "No clients yet"
           }
           description={
-            search || tiers.length > 0 || atRiskOnly
-              ? "Try clearing a filter or two."
-              : "Add your first client, or convert a won deal from the pipeline."
+            showArchived
+              ? "Deleted clients appear here and can be restored."
+              : search || tiers.length > 0 || atRiskOnly
+                ? "Try clearing a filter or two."
+                : "Add your first client, or convert a won deal from the pipeline."
           }
           action={
             <Button onClick={() => setCreating(true)}>
@@ -141,7 +166,20 @@ export function ClientsList() {
           {/* Mobile: stacked cards. Desktop: a scannable table. */}
           <div className="space-y-2 lg:hidden">
             {clients.map((client) => (
-              <ClientCard key={client.id} client={client} />
+              <div key={client.id} className="space-y-2">
+                <ClientCard client={client} />
+                {showArchived && (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    className="w-full"
+                    disabled={restoreClient.isPending}
+                    onClick={() => restoreClient.mutate(client.id)}
+                  >
+                    Restore {client.businessName}
+                  </Button>
+                )}
+              </div>
             ))}
           </div>
 
@@ -155,6 +193,11 @@ export function ClientsList() {
                   <th scope="col" className="px-4 py-2.5 font-medium">Owner</th>
                   <th scope="col" className="px-4 py-2.5 font-medium">Last contact</th>
                   <th scope="col" className="px-4 py-2.5 font-medium">Next task</th>
+                  {showArchived && (
+                    <th scope="col" className="px-4 py-2.5 text-right font-medium">
+                      <span className="sr-only">Restore</span>
+                    </th>
+                  )}
                 </tr>
               </thead>
               <tbody className="divide-y divide-separator/50">
@@ -211,6 +254,18 @@ export function ClientsList() {
                         <span className="text-ink/55">—</span>
                       )}
                     </td>
+                    {showArchived && (
+                      <td className="px-4 py-3 text-right">
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          disabled={restoreClient.isPending}
+                          onClick={() => restoreClient.mutate(client.id)}
+                        >
+                          Restore
+                        </Button>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>

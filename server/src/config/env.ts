@@ -57,7 +57,12 @@ export function isStorageEnabled(env: Env): boolean {
  * production — see .dev.vars.example.
  */
 export function areQaHooksEnabled(env: Env): boolean {
-  return env.QA_HOOKS_ENABLED === "true";
+  // Two independent conditions, because one env var is one typo away from
+  // exposing hard-delete and tier-history rewriting on the live database. A
+  // production deployment cannot enable these no matter what QA_HOOKS_ENABLED
+  // says — turning them on there requires changing APP_ENV too, which is a
+  // deliberate act rather than a slip.
+  return env.QA_HOOKS_ENABLED === "true" && !isProduction(env);
 }
 
 export function corsOrigins(env: Env): string[] {

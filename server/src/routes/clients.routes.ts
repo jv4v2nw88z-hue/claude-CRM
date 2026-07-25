@@ -6,15 +6,20 @@ import { AT_RISK_DAYS } from "../services/dashboardService";
 import { OPEN_TASK_STATUSES } from "../domain/enums";
 import { daysBetween } from "../utils/dateHelpers";
 import { changeTierSchema, createClientSchema, updateClientSchema } from "../utils/validation";
+import { requireRole } from "../middleware/requireRole";
 import type { AppEnv } from "../types";
 
 const router = new Hono<AppEnv>();
 
 router.get("/", async (c) => {
   const prisma = c.get("prisma");
-  const { tier, search, ownerId, atRisk } = c.req.query();
+  const { tier, search, ownerId, atRisk, archived } = c.req.query();
 
-  const where: Record<string, unknown> = { isActive: true };
+  // `?archived=true` flips the list to the other side of the soft delete, which
+  // is what makes an accidental deletion recoverable through the product rather
+  // than through SQL. Anything else — absent, "false", junk — means active, so a
+  // malformed query can never silently show archived records as live ones.
+  const where: Record<string, unknown> = { isActive: archived !== "true" };
   if (tier) where.currentTier = { in: tier.split(",") };
   if (ownerId) where.accountOwnerId = ownerId;
   // SQLite's LIKE is case-insensitive for ASCII by default, so the `mode:
@@ -25,8 +30,9 @@ router.get("/", async (c) => {
   const clients = await prisma.client.findMany({
     where,
     include: {
-      retainers: true,
-      contacts: { where: { isPrimary: true }, take: 1 },
+      // A deleted retainer stops counting toward the list's MRR column.
+      retainers: { where: { isActive: true } },
+      contacts: { where: { isPrimary: true, isActive: true }, take: 1 },
       accountOwner: { select: { id: true, name: true, role: true } },
       interactions: { orderBy: { occurredAt: "desc" }, take: 1 },
       tasks: {
@@ -68,12 +74,21 @@ router.get("/:id", async (c) => {
   });
   if (!client) throw new HttpError(404, "Client not found");
 
+  /*
+   * An archived client is still fetchable by id — stale links and the archive
+   * view both need it — but it says so. Returning it indistinguishable from a
+   * live record, which is what happened before, meant the UI could show a
+   * deleted client as though nothing had happened.
+   */
+  const isArchived = !client.isActive;
+
   const daysSinceLaunch = client.websiteLaunchDate
     ? daysBetween(client.websiteLaunchDate, new Date())
     : null;
 
   return c.json({
     ...client,
+    isArchived,
     mrr: activeMrr(client.retainers),
     daysSinceLaunch,
     isAtRisk:
@@ -142,12 +157,31 @@ router.patch("/:id/tier", async (c) => {
   return c.json(updated);
 });
 
-router.delete("/:id", async (c) => {
+/*
+ * TECHNICAL-only. Deleting a client hides an entire relationship — its retainer,
+ * its history, its contribution to MRR — and until archive/restore existed there
+ * was no way back through the product. Restore is open to both roles; removal is
+ * the asymmetric one.
+ */
+router.delete("/:id", requireRole("TECHNICAL"), async (c) => {
   // Soft delete: this is the only record of the relationship, never drop the row.
   await c
     .get("prisma")
     .client.update({ where: { id: c.req.param("id") }, data: { isActive: false } });
   return c.body(null, 204);
+});
+
+/*
+ * Restore is deliberately open to both roles while deletion is TECHNICAL-only.
+ * The asymmetry is the point: undoing a mistake should never need a second
+ * person, so the undo toast works for whoever hit delete.
+ */
+router.post("/:id/restore", async (c) => {
+  const client = await c.get("prisma").client.update({
+    where: { id: c.req.param("id") },
+    data: { isActive: true },
+  });
+  return c.json({ ...client, isArchived: false });
 });
 
 export default router;

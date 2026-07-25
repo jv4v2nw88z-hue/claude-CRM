@@ -10,9 +10,11 @@ export async function getDashboardSummary(prisma: PrismaClient, now = new Date()
   const [clients, allRetainers, recentInteractions] = await Promise.all([
     prisma.client.findMany({
       where: { isActive: true },
-      include: { retainers: true },
+      // Soft-deleted retainers are excluded everywhere MRR is computed.
+      include: { retainers: { where: { isActive: true } } },
     }),
     prisma.retainer.findMany({
+      where: { isActive: true },
       include: { client: { select: { id: true, businessName: true, isActive: true } } },
     }),
     prisma.interaction.findMany({
@@ -92,6 +94,7 @@ export async function getDashboardSummary(prisma: PrismaClient, now = new Date()
 
 export async function getRevenueSummary(prisma: PrismaClient, now = new Date()) {
   const retainers = await prisma.retainer.findMany({
+    where: { isActive: true },
     include: { client: { select: { id: true, businessName: true, isActive: true } } },
     orderBy: [{ status: "asc" }, { createdAt: "desc" }],
   });

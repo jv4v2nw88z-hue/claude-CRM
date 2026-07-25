@@ -18,7 +18,9 @@
  */
 
 const BASE_URL = process.env.QA_BASE_URL ?? "http://localhost:8787";
-const EMAIL = process.env.QA_EMAIL ?? "cole@midigitalexpansion.com";
+// TECHNICAL, because the run ends by deleting its throwaway client and client
+// deletion is now role-gated. Override with QA_EMAIL to exercise a SALES account.
+const EMAIL = process.env.QA_EMAIL ?? "brian@midigitalexpansion.com";
 // Matches SEED_PASSWORD in .dev.vars. Must satisfy PASSWORD_MIN_LENGTH, since
 // the QA user is a real account subject to the same password rules.
 const PASSWORD = process.env.QA_PASSWORD ?? "local-dev-password";

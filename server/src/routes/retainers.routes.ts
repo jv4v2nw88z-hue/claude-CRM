@@ -8,6 +8,7 @@ export const retainersRouter = new Hono<AppEnv>();
 
 retainersRouter.get("/", async (c) => {
   const retainers = await c.get("prisma").retainer.findMany({
+    where: { isActive: true },
     include: { client: { select: { id: true, businessName: true, isActive: true } } },
     orderBy: [{ status: "asc" }, { createdAt: "desc" }],
   });
@@ -33,8 +34,16 @@ retainersRouter.patch("/:id", async (c) => {
   return c.json(retainer);
 });
 
+/*
+ * Soft delete, matching Client. Deleting the row outright made past MRR
+ * unreconstructable: mrrTrend rebuilds each month from retainer start and end
+ * dates, so a removed retainer silently rewrote revenue history rather than
+ * ending it.
+ */
 retainersRouter.delete("/:id", async (c) => {
-  await c.get("prisma").retainer.delete({ where: { id: c.req.param("id") } });
+  await c
+    .get("prisma")
+    .retainer.update({ where: { id: c.req.param("id") }, data: { isActive: false } });
   return c.body(null, 204);
 });
 
@@ -43,7 +52,7 @@ export const clientRetainersRouter = new Hono<AppEnv>();
 
 clientRetainersRouter.get("/", async (c) => {
   const retainers = await c.get("prisma").retainer.findMany({
-    where: { clientId: requireParam(c, "clientId") },
+    where: { clientId: requireParam(c, "clientId"), isActive: true },
     orderBy: { createdAt: "desc" },
   });
   return c.json(retainers);
@@ -63,4 +72,12 @@ clientRetainersRouter.post("/", async (c) => {
     },
   });
   return c.json(retainer, 201);
+});
+
+/* Undo for the soft delete above. Open to both roles — see clients.routes.ts. */
+retainersRouter.post("/:id/restore", async (c) => {
+  const retainer = await c
+    .get("prisma")
+    .retainer.update({ where: { id: c.req.param("id") }, data: { isActive: true } });
+  return c.json(retainer);
 });

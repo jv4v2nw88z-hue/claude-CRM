@@ -88,8 +88,13 @@ export async function updateClientTier(
 }
 
 export const CLIENT_DETAIL_INCLUDE = {
-  contacts: { orderBy: [{ isPrimary: "desc" as const }, { lastName: "asc" as const }] },
-  retainers: { orderBy: { createdAt: "desc" as const } },
+  // isActive on both: soft-deleted children must not surface on the detail page,
+  // and a deleted retainer must not keep contributing to this client's MRR.
+  contacts: {
+    where: { isActive: true },
+    orderBy: [{ isPrimary: "desc" as const }, { lastName: "asc" as const }],
+  },
+  retainers: { where: { isActive: true }, orderBy: { createdAt: "desc" as const } },
   tasks: {
     orderBy: [{ status: "asc" as const }, { dueDate: "asc" as const }],
     include: { assignedTo: { select: { id: true, name: true, role: true } } },

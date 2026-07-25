@@ -40,11 +40,19 @@ export interface ClientFilters {
   search?: string;
   ownerId?: string;
   atRisk?: boolean;
+  /** Flips the list to soft-deleted clients. */
+  archived?: boolean;
 }
 
 export const clientsApi = {
   list: (filters: ClientFilters = {}) =>
-    api.get<ClientListItem[]>(`/clients${qs({ ...filters, atRisk: filters.atRisk || undefined })}`),
+    api.get<ClientListItem[]>(
+      `/clients${qs({
+        ...filters,
+        atRisk: filters.atRisk || undefined,
+        archived: filters.archived || undefined,
+      })}`
+    ),
   detail: (id: string) => api.get<ClientDetail>(`/clients/${id}`),
   create: (data: Record<string, unknown>) => api.post<ClientListItem>("/clients", data),
   update: (id: string, data: Record<string, unknown>) =>
@@ -52,6 +60,7 @@ export const clientsApi = {
   changeTier: (id: string, newTier: string, note?: string) =>
     api.patch<ClientDetail>(`/clients/${id}/tier`, { newTier, note }),
   remove: (id: string) => api.delete<void>(`/clients/${id}`),
+  restore: (id: string) => api.post<ClientDetail>(`/clients/${id}/restore`),
 };
 
 export const contactsApi = {
@@ -60,6 +69,7 @@ export const contactsApi = {
     api.post<Contact>(`/clients/${clientId}/contacts`, data),
   update: (id: string, data: Record<string, unknown>) => api.patch<Contact>(`/contacts/${id}`, data),
   remove: (id: string) => api.delete<void>(`/contacts/${id}`),
+  restore: (id: string) => api.post<Contact>(`/contacts/${id}/restore`),
 };
 
 // ---------------------------
@@ -74,6 +84,7 @@ export const retainersApi = {
   update: (id: string, data: Record<string, unknown>) =>
     api.patch<Retainer>(`/retainers/${id}`, data),
   remove: (id: string) => api.delete<void>(`/retainers/${id}`),
+  restore: (id: string) => api.post<Retainer>(`/retainers/${id}/restore`),
 };
 
 // ---------------------------
