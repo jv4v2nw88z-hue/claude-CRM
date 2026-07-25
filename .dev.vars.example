@@ -2,13 +2,15 @@
 # Copy to `.dev.vars` (gitignored) and fill in. Production values are set with
 # `npx wrangler secret put <NAME>` instead — never commit real secrets.
 
-# Required. Signs the session cookie. 16+ chars; generate with:
-#   node -e "console.log(crypto.randomBytes(32).toString('hex'))"
 # Marks this as a development runtime. Two things read it: the session cookie
 # drops its Secure flag so it works over http://localhost, and the QA hooks
 # refuse to mount unless this is NOT production — so a stray QA_HOOKS_ENABLED in
-# a real deployment cannot expose hard-delete.
+# a real deployment cannot expose hard-delete. It defaults to production when
+# absent, so this must be present for local development to behave.
 APP_ENV="development"
+
+# Required. Signs the session cookie. 16+ chars; generate with:
+#   node -e "console.log(crypto.randomBytes(32).toString('hex'))"
 JWT_SECRET="dev-only-change-me-at-least-16-chars"
 
 # Optional. Guards POST /api/internal/run-automation so an external caller can

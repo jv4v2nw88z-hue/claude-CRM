@@ -1,0 +1,92 @@
+name: CI
+
+on:
+  push:
+    branches: [main, staging]
+  pull_request:
+    branches: [main, staging]
+
+# A second push to the same branch cancels the first — no value in finishing a
+# run against code that has already been replaced.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: npm
+          cache-dependency-path: |
+            server/package-lock.json
+            client/package-lock.json
+
+      - name: Install workspaces
+        # Same entry point the Cloudflare build uses, so CI and deploy install
+        # identically — a difference between them is how "works in CI" turns into
+        # a broken deploy.
+        run: npm run ensure:deps
+
+      - name: Typecheck both workspaces
+        run: npm run typecheck
+
+      - name: Unit tests
+        run: npm run test --prefix server
+
+      - name: Build
+        run: npm run build
+
+      # --- Integration: the real API, against a real Worker ------------------
+      # qa:lifecycle drives the whole service ladder over HTTP. It needs a
+      # database and the QA hooks, so this section stands up a local D1, seeds
+      # it, and runs the Worker exactly as `npm run dev` would.
+      - name: Provision local secrets
+        run: |
+          cp .dev.vars.example .dev.vars
+          # .dev.vars.example ships a placeholder JWT_SECRET; CI needs a real one
+          # of adequate length, and it never leaves the runner.
+          sed -i "s|^JWT_SECRET=.*|JWT_SECRET=\"$(openssl rand -hex 32)\"|" .dev.vars
+
+      - name: Apply migrations to a fresh local D1
+        run: npm run migrate:local
+
+      - name: Start the Worker
+        run: |
+          npm run dev:server > /tmp/worker.log 2>&1 &
+          echo $! > /tmp/worker.pid
+
+      - name: Wait for the Worker to answer
+        # Polls the health endpoint rather than sleeping a fixed amount: a fixed
+        # sleep is either flaky or slow, and usually manages both.
+        run: |
+          for i in $(seq 1 60); do
+            if curl -sf http://localhost:8787/api/health > /dev/null; then
+              echo "Worker ready after ${i}s"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::Worker did not become ready in 60s"
+          cat /tmp/worker.log
+          exit 1
+
+      - name: Seed
+        run: npm run seed:local
+
+      - name: End-to-end lifecycle check
+        run: npm run qa:lifecycle
+
+      - name: Worker log on failure
+        if: failure()
+        run: cat /tmp/worker.log || true
+
+      - name: Stop the Worker
+        if: always()
+        run: kill "$(cat /tmp/worker.pid)" 2>/dev/null || true

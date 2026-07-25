@@ -10,12 +10,15 @@
     "ensure:deps": "node scripts/ensureDeps.mjs",
     "build": "npm run ensure:deps && npm run build --prefix client && npm run build --prefix server",
     "typecheck": "npm run typecheck --prefix server && npm run typecheck --prefix client",
+    "test": "npm run test --prefix server",
     "migrate:new": "npm run migrate:new --prefix server --",
     "migrate:local": "npm run migrate:local --prefix server",
     "migrate:remote": "npm run migrate:remote --prefix server",
     "seed:local": "npm run seed:local --prefix server",
     "seed:remote": "npm run seed:remote --prefix server",
     "deploy": "npm run build --prefix client && npm run deploy --prefix server",
+    "deploy:staging": "npm run cf:build && ./server/node_modules/.bin/wrangler deploy --env staging",
+    "migrate:staging": "./server/node_modules/.bin/wrangler d1 migrations apply midigitalexpansion-crm-staging --env staging --remote",
     "cf:build": "npm run ensure:deps && npm run build --prefix client && npm run codegen --prefix server",
     "qa:lifecycle": "npm run qa:lifecycle --prefix server"
   }

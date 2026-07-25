@@ -80,6 +80,45 @@
     // Only needed if you ever serve the frontend from a different origin than
     // this Worker. Same-origin (the default) needs no CORS at all.
     "CORS_ORIGIN": ""
+  },
+
+  /*
+   * Staging.
+   *
+   * A separate Worker with its own D1, so a schema change or a bad deploy can be
+   * exercised against real infrastructure without touching the only copy of the
+   * client book. Deploy with `npm run deploy:staging`.
+   *
+   * Two things are deliberately different from production:
+   *  - No `triggers.crons`. Two Workers firing the same automation engine at the
+   *    same D1 would be one thing; firing at *different* databases is fine, but a
+   *    staging cron sending real notification emails is not. Fire it by hand via
+   *    POST /api/automation-rules/run when testing it.
+   *  - APP_ENV stays "production" so the session cookie keeps its Secure flag —
+   *    staging is served over HTTPS like the real thing. It is not a development
+   *    runtime, and QA hooks must stay unmounted there too.
+   *
+   * `database_id` is a placeholder until the staging database is created:
+   *   npx wrangler d1 create midigitalexpansion-crm-staging
+   */
+  "env": {
+    "staging": {
+      "name": "claudecrm-staging",
+      "vars": {
+        "APP_ENV": "production",
+        "MAIL_FROM": "MiDigitalExpansion CRM (staging) <crm@midigitalexpansion.com>",
+        "R2_PUBLIC_BASE_URL": "",
+        "CORS_ORIGIN": ""
+      },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "midigitalexpansion-crm-staging",
+          "database_id": "REPLACE_WITH_STAGING_D1_ID",
+          "migrations_dir": "server/migrations"
+        }
+      ]
+    }
   }
 
   // Secrets — never commit these. Set with `npx wrangler secret put <NAME>`:

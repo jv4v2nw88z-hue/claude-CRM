@@ -15,7 +15,7 @@ export interface AutomationRunResult {
   tasksCreated: { taskId: string; clientId: string; ruleId: string; title: string }[];
 }
 
-type Rule = {
+export type Rule = {
   id: string;
   name: string;
   triggerTier: string | null;
@@ -29,7 +29,7 @@ type Rule = {
 
 type Retainer = { status: string; startDate: Date | null; endDate: Date | null };
 type Task = { id: string; sourceRuleId: string | null; status: string; createdAt: Date };
-type ClientRow = {
+export type ClientRow = {
   id: string;
   businessName: string;
   currentTier: string;
@@ -135,7 +135,15 @@ export async function runAutomationEngine(
 }
 
 /** Decides whether a rule is due for a client, and what the task would be called. */
-function planTask(
+/*
+ * Exported for unit tests.
+ *
+ * These two decide whether a reminder fires and when — the arithmetic the whole
+ * product rests on — and they are pure. Testing them directly with plain objects
+ * beats reaching them only through a seeded database and a live Worker, which is
+ * what qa:lifecycle does and why it can only cover the happy path.
+ */
+export function planTask(
   client: ClientRow,
   rule: Rule,
   latestTierChange: Map<string, Date>,
@@ -175,7 +183,7 @@ function planTask(
  *  - Other tier rules anchor on the most recent move into that tier.
  *  - Retainer rules anchor on the retainer's start or end date.
  */
-function getAnchorDate(
+export function getAnchorDate(
   client: ClientRow,
   rule: Rule,
   latestTierChange: Map<string, Date>

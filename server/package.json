@@ -9,6 +9,8 @@
     "build": "npm run codegen && wrangler deploy --config ../wrangler.jsonc --dry-run --outdir dist",
     "deploy": "npm run codegen && wrangler deploy --config ../wrangler.jsonc",
     "typecheck": "npm run codegen && tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "prisma:generate": "prisma generate",
     "migrate:new": "tsx scripts/makeMigration.ts",
     "migrate:local": "wrangler d1 migrations apply midigitalexpansion-crm --config ../wrangler.jsonc --local",
@@ -28,6 +30,7 @@
     "prisma": "^7.9.0",
     "tsx": "^4.19.1",
     "typescript": "^5.6.3",
+    "vitest": "^2.1.9",
     "wrangler": "^4.114.0"
   }
 }
