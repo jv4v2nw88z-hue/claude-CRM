@@ -367,6 +367,80 @@ async function main() {
    * client-side gesture rather than a security control. This is the regression
    * guard for that — if it ever passes a 200 again, revocation is broken.
    */
+  /*
+   * Ownership and delegated access, over HTTP against the real middleware.
+   *
+   * The unit tests cover the decision branches; this covers the thing they
+   * cannot — that the middleware is actually mounted on the routes that matter
+   * and returns a real 403. A permissions bug where the gate exists but is not
+   * wired up looks identical to working code from the unit level.
+   */
+  console.log("\nOwnership and delegated access");
+  {
+    const users = await call<{ id: string; email: string; role: string }[]>("/users");
+    const other = users.find((u) => u.email !== EMAIL);
+
+    // The QA account is TECHNICAL, so it owns this client and can always write.
+    const owned = await post<{ id: string }>("/clients", {
+      businessName: `QA Access ${Date.now()}`,
+    });
+
+    const detail = await call<{ accountOwnerId: string | null }>(`/clients/${owned.id}`);
+    check("a new client is owned by its creator", detail.accountOwnerId === login.user.id);
+
+    const access = await call<{ owner: { id: string } | null; collaborators: unknown[] }>(
+      `/clients/${owned.id}/access`
+    );
+    check("access list reports the owner", access.owner?.id === login.user.id);
+    check("a new client starts with no collaborators", access.collaborators.length === 0);
+
+    if (other) {
+      await post(`/clients/${owned.id}/access`, { userId: other.id });
+      const granted = await call<{ collaborators: { id: string }[] }>(
+        `/clients/${owned.id}/access`
+      );
+      check(
+        "granting adds the collaborator",
+        granted.collaborators.some((u) => u.id === other.id)
+      );
+
+      // Granting twice must not produce a second row.
+      await post(`/clients/${owned.id}/access`, { userId: other.id });
+      const again = await call<{ collaborators: unknown[] }>(`/clients/${owned.id}/access`);
+      check("granting twice is idempotent", again.collaborators.length === 1);
+
+      await del(`/clients/${owned.id}/access/${other.id}`);
+      const revoked = await call<{ collaborators: unknown[] }>(`/clients/${owned.id}/access`);
+      check("revoking removes the collaborator", revoked.collaborators.length === 0);
+    }
+
+    // The owner cannot be revoked — that is what ownership transfer is for.
+    const revokeOwner = await fetch(
+      `${BASE_URL}/api/clients/${owned.id}/access/${login.user.id}`,
+      { method: "DELETE", headers: { cookie } }
+    );
+    check("the owner's access cannot be revoked", revokeOwner.status === 400);
+
+    /*
+     * Every TECHNICAL write records an override — including on a client they
+     * own, because the reason is the role, not the ownership.
+     *
+     * The write has to go through a *gated* route to prove anything: POST
+     * /clients isn't gated (there is no client yet to check access against), so
+     * creating one above logged nothing. PATCH is gated, so it does.
+     */
+    await patch(`/clients/${owned.id}`, { industry: "Testing" });
+
+    const overrides = await call<{ entries: { field: string }[] }>(`/clients/${owned.id}/audit`);
+    check(
+      "a gated TECHNICAL write is recorded as an override",
+      overrides.entries.some((e) => e.field === "__technical_override__"),
+      overrides.entries.map((e) => e.field)
+    );
+
+    await del(`/qa/clients/${owned.id}`);
+  }
+
   console.log("\nSession revocation");
   const revoked = cookie;
   await post("/auth/logout", undefined);

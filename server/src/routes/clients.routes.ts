@@ -7,6 +7,10 @@ import { OPEN_TASK_STATUSES } from "../domain/enums";
 import { daysBetween } from "../utils/dateHelpers";
 import { changeTierSchema, createClientSchema, updateClientSchema } from "../utils/validation";
 import { requireRole } from "../middleware/requireRole";
+import { requireClientAccess } from "../middleware/requireClientAccess";
+import { currentUser } from "../middleware/requireAuth";
+import { transferOwnershipSchema } from "../utils/validation";
+import { logFieldChanges } from "../services/auditService";
 import type { AppEnv } from "../types";
 
 const router = new Hono<AppEnv>();
@@ -99,6 +103,43 @@ router.get("/:id", async (c) => {
   });
 });
 
+/**
+ * The change history for one client.
+ *
+ * An audit log nobody can read is only slightly better than no audit log: the
+ * point of recording who changed a retainer amount is that the question can be
+ * answered later, and answering it through raw SQL means it never gets asked.
+ *
+ * Covers the client itself plus its retainers and deals, since "what happened to
+ * this account" is the question being asked, not "what happened to this row".
+ */
+router.get("/:id/audit", async (c) => {
+  const clientId = c.req.param("id");
+  const prisma = c.get("prisma");
+
+  const [retainers, deals] = await Promise.all([
+    prisma.retainer.findMany({ where: { clientId }, select: { id: true } }),
+    prisma.deal.findMany({ where: { clientId }, select: { id: true } }),
+  ]);
+
+  const entries = await prisma.auditLog.findMany({
+    where: {
+      OR: [
+        { entity: "Client", entityId: clientId },
+        { entity: "Retainer", entityId: { in: retainers.map((r) => r.id) } },
+        { entity: "Deal", entityId: { in: deals.map((d) => d.id) } },
+      ],
+    },
+    include: { changedBy: { select: { id: true, name: true } } },
+    orderBy: { changedAt: "desc" },
+    // Bounded: this is a history view, and an unbounded one on a long-lived
+    // client is the same unpaginated-list problem the audit flagged elsewhere.
+    take: 100,
+  });
+
+  return c.json({ entries });
+});
+
 router.post("/", async (c) => {
   const parsed = createClientSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) return c.json({ error: parsed.error.flatten() }, 400);
@@ -109,6 +150,10 @@ router.post("/", async (c) => {
   const client = await c.get("prisma").client.create({
     data: {
       ...rest,
+      // Whoever creates a client owns it unless they said otherwise. Without
+      // this an unowned client is writable by nobody except TECHNICAL, which
+      // would make "add a client" a broken action for Cole.
+      accountOwnerId: rest.accountOwnerId ?? currentUser(c)?.id ?? null,
       currentTier: tier,
       // A client created directly at WEBSITE_LIVE still needs a launch date,
       // otherwise the at-risk timer never starts.
@@ -127,7 +172,7 @@ router.post("/", async (c) => {
   return c.json({ ...client, mrr: 0 }, 201);
 });
 
-router.patch("/:id", async (c) => {
+router.patch("/:id", requireClientAccess("id"), async (c) => {
   const parsed = updateClientSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) return c.json({ error: parsed.error.flatten() }, 400);
 
@@ -143,7 +188,7 @@ router.patch("/:id", async (c) => {
   return c.json({ ...updated, mrr: activeMrr(updated.retainers) });
 });
 
-router.patch("/:id/tier", async (c) => {
+router.patch("/:id/tier", requireClientAccess("id"), async (c) => {
   const parsed = changeTierSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) return c.json({ error: parsed.error.flatten() }, 400);
 
@@ -158,12 +203,51 @@ router.patch("/:id/tier", async (c) => {
 });
 
 /*
- * TECHNICAL-only. Deleting a client hides an entire relationship — its retainer,
- * its history, its contribution to MRR — and until archive/restore existed there
- * was no way back through the product. Restore is open to both roles; removal is
- * the asymmetric one.
+ * Ownership transfer — TECHNICAL only.
+ *
+ * Deliberately not something an owner can do for themselves. Handing an account
+ * to someone else changes who is accountable for it, and letting the current
+ * owner do that unilaterally means a client can be quietly moved off a desk.
+ * It also can't be self-service without becoming a way to escape the access
+ * list you were placed under.
  */
-router.delete("/:id", requireRole("TECHNICAL"), async (c) => {
+router.patch("/:id/owner", requireRole("TECHNICAL"), async (c) => {
+  const parsed = transferOwnershipSchema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) return c.json({ error: parsed.error.flatten() }, 400);
+
+  const prisma = c.get("prisma");
+  const id = c.req.param("id");
+
+  const existing = await prisma.client.findUnique({
+    where: { id },
+    select: { accountOwnerId: true },
+  });
+  if (!existing) throw new HttpError(404, "Client not found");
+
+  const client = await prisma.client.update({
+    where: { id },
+    data: { accountOwnerId: parsed.data.accountOwnerId },
+  });
+
+  // Ownership is an access-control fact, so the change is recorded like one.
+  await logFieldChanges(prisma, "Client", id, currentUser(c)?.id ?? null, [
+    {
+      field: "accountOwnerId",
+      oldValue: existing.accountOwnerId,
+      newValue: parsed.data.accountOwnerId,
+    },
+  ]);
+
+  return c.json(client);
+});
+
+/*
+ * TECHNICAL-only. Deleting a client hides an entire relationship — its retainer,
+ * its history, its contribution to MRR. Restore is open to both roles; removal
+ * is the asymmetric one. requireClientAccess still runs after the role gate so
+ * the override is recorded like any other.
+ */
+router.delete("/:id", requireRole("TECHNICAL"), requireClientAccess("id"), async (c) => {
   // Soft delete: this is the only record of the relationship, never drop the row.
   await c
     .get("prisma")

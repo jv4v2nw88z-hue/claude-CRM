@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { HttpError } from "../lib/http";
 import { currentUser } from "../middleware/requireAuth";
+import { requireDealClientAccess } from "../middleware/requireClientAccess";
 import {
   diffWatchedFields,
   logFieldChanges,
@@ -27,7 +28,7 @@ router.post("/", async (c) => {
   return c.json(deal, 201);
 });
 
-router.patch("/:id", async (c) => {
+router.patch("/:id", requireDealClientAccess(), async (c) => {
   const parsed = updateDealSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) return c.json({ error: parsed.error.flatten() }, 400);
 
@@ -123,7 +124,7 @@ router.post("/:id/convert", async (c) => {
   return c.json(client, 201);
 });
 
-router.delete("/:id", async (c) => {
+router.delete("/:id", requireDealClientAccess(), async (c) => {
   await c.get("prisma").deal.delete({ where: { id: c.req.param("id") } });
   return c.body(null, 204);
 });

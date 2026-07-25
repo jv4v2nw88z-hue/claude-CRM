@@ -23,5 +23,11 @@ export type AppEnv = {
   Variables: {
     prisma: PrismaClient;
     user: AuthedUser | null;
+    /**
+     * Why the current request was allowed to write to a client, set by
+     * requireClientAccess. Lets a handler tell an owner's edit apart from a
+     * TECHNICAL override without re-resolving access.
+     */
+    accessReason: "TECHNICAL_OVERRIDE" | "OWNER" | "DELEGATED" | null;
   };
 };

@@ -16,6 +16,50 @@ import type { PrismaClient } from "../generated/prisma/client";
 export type AuditEntity = "Deal" | "Retainer" | "Client";
 
 /**
+ * The field name used for a TECHNICAL override record.
+ *
+ * Distinct from any real column so override records can never be confused with
+ * field edits, and so "show me every admin override" is one indexed query rather
+ * than a scan with a heuristic.
+ */
+export const TECHNICAL_OVERRIDE_FIELD = "__technical_override__";
+
+/**
+ * Records that TECHNICAL privilege was used to write to a client the user does
+ * not own and was not granted.
+ *
+ * Written on every override without exception. The point of the record is that
+ * it is complete: an incomplete one cannot be distinguished from no override
+ * having happened, and the assumption that makes sampling look reasonable —
+ * that there is only one technical account — is precisely the thing that
+ * changes without anyone revisiting this.
+ *
+ * Never throws, for the same reason as logFieldChanges: losing the record is
+ * bad, losing the user's write because the record failed is worse.
+ */
+export async function logTechnicalOverride(
+  prisma: PrismaClient,
+  clientId: string,
+  userId: string,
+  request: { method: string; path: string }
+): Promise<void> {
+  try {
+    await prisma.auditLog.create({
+      data: {
+        entity: "Client",
+        entityId: clientId,
+        field: TECHNICAL_OVERRIDE_FIELD,
+        oldValue: null,
+        newValue: `${request.method} ${request.path}`,
+        changedById: userId,
+      },
+    });
+  } catch (err) {
+    console.error(`Technical override log failed for Client:${clientId}`, err);
+  }
+}
+
+/**
  * Stringify for the log.
  *
  * The log records what a person would have seen, not a value to compute from,

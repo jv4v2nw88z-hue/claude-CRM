@@ -104,6 +104,38 @@ export function useDeleteClient() {
   return useMutation({ mutationFn: (id: string) => clientsApi.remove(id), onSuccess: invalidate });
 }
 
+export function useClientAccess(clientId: string) {
+  return useQuery({
+    queryKey: ["client-access", clientId],
+    queryFn: () => clientsApi.access(clientId),
+    enabled: Boolean(clientId),
+  });
+}
+
+export function useGrantClientAccess(clientId: string) {
+  const invalidate = useInvalidateAll();
+  return useMutation({
+    mutationFn: (userId: string) => clientsApi.grantAccess(clientId, userId),
+    onSuccess: invalidate,
+  });
+}
+
+export function useRevokeClientAccess(clientId: string) {
+  const invalidate = useInvalidateAll();
+  return useMutation({
+    mutationFn: (userId: string) => clientsApi.revokeAccess(clientId, userId),
+    onSuccess: invalidate,
+  });
+}
+
+export function useTransferOwnership(clientId: string) {
+  const invalidate = useInvalidateAll();
+  return useMutation({
+    mutationFn: (accountOwnerId: string) => clientsApi.transferOwnership(clientId, accountOwnerId),
+    onSuccess: invalidate,
+  });
+}
+
 /** Undoes a soft-deleted retainer. Drives the undo toast on ClientDetail. */
 export function useRestoreRetainer() {
   const invalidate = useInvalidateAll();

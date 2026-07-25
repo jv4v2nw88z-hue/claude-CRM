@@ -49,6 +49,7 @@ import {
 } from "../lib/format";
 import { ConfirmModal } from "../components/ConfirmModal";
 import { UndoToast } from "../components/UndoToast";
+import { ManageAccessPanel } from "../components/ManageAccessPanel";
 import { InteractionTimelineItem } from "../components/InteractionTimelineItem";
 import { SlideOverPanel } from "../components/SlideOverPanel";
 import { TaskChecklist } from "../components/TaskChecklist";
@@ -64,7 +65,15 @@ import {
   Skeleton,
 } from "../components/ui";
 
-const TABS = ["Overview", "Tasks", "Interactions", "Retainers", "Documents", "History"] as const;
+const TABS = [
+  "Overview",
+  "Tasks",
+  "Interactions",
+  "Retainers",
+  "Documents",
+  "History",
+  "Access",
+] as const;
 type Tab = (typeof TABS)[number];
 
 export function ClientDetail() {
@@ -137,6 +146,7 @@ export function ClientDetail() {
           {tab === "Retainers" && <RetainersTab client={client} onAdd={() => setPanel("retainer")} />}
           {tab === "Documents" && <DocumentsTab client={client} />}
           {tab === "History" && <HistoryTab client={client} />}
+          {tab === "Access" && <ManageAccessPanel clientId={client.id} />}
         </div>
       </div>
 

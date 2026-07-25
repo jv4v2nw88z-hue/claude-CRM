@@ -64,6 +64,8 @@ model User {
   ownedClients        Client[]              @relation("AccountOwner")
   tierChanges         ServiceHistoryEntry[] @relation("TierChangedBy")
   auditedChanges      AuditLog[]            @relation("AuditChanges")
+  clientAccess        AccountAccess[]       @relation("AccessGrantedTo")
+  accessGrantsMade    AccountAccess[]       @relation("AccessGrantedBy")
 }
 
 model Client {
@@ -94,6 +96,7 @@ model Client {
   serviceHistory ServiceHistoryEntry[]
   documents      Document[]
   deals          Deal[]
+  accessGrants   AccountAccess[]
 
   @@index([currentTier])
   @@index([accountOwnerId])
@@ -140,6 +143,31 @@ model Retainer {
 
   @@index([clientId])
   @@index([status])
+}
+
+/// Explicitly granted write access to a client, on top of its owner.
+///
+/// `Client.accountOwnerId` stays the primary owner; this is the delegated
+/// collaborator list. Write access to a client is: TECHNICAL, or the owner, or a
+/// row here. Reads are deliberately not gated — see requireClientAccess.
+///
+/// Deals inherit their parent client's access rather than carrying their own
+/// list: a deal belongs to exactly one client, and a second ACL would be a
+/// second thing to keep in sync and to get wrong.
+model AccountAccess {
+  id       String @id @default(cuid())
+  clientId String
+  client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  userId   String
+  user     User   @relation("AccessGrantedTo", fields: [userId], references: [id], onDelete: Cascade)
+
+  grantedById String?
+  grantedBy   User?    @relation("AccessGrantedBy", fields: [grantedById], references: [id])
+  grantedAt   DateTime @default(now())
+
+  /// One grant per person per client — granting twice is a no-op, not a second row.
+  @@unique([clientId, userId])
+  @@index([userId])
 }
 
 /// Field-level change log for the values that carry money.

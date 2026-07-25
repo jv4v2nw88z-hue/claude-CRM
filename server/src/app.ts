@@ -16,6 +16,7 @@ import tasksRoutes from "./routes/tasks.routes";
 import { clientInteractionsRouter, interactionsRouter } from "./routes/interactions.routes";
 import dealsRoutes from "./routes/deals.routes";
 import { clientDocumentsRouter, documentsRouter } from "./routes/documents.routes";
+import { clientAccessRouter } from "./routes/access.routes";
 import dashboardRoutes from "./routes/dashboard.routes";
 import automationRulesRoutes from "./routes/automationRules.routes";
 import usersRoutes from "./routes/users.routes";
@@ -57,6 +58,7 @@ export function createApp() {
   api.route("/clients/:clientId/retainers", clientRetainersRouter);
   api.route("/clients/:clientId/interactions", clientInteractionsRouter);
   api.route("/clients/:clientId/documents", clientDocumentsRouter);
+  api.route("/clients/:clientId/access", clientAccessRouter);
   api.route("/clients", clientsRoutes);
 
   api.route("/users", usersRoutes);

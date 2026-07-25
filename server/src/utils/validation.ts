@@ -83,6 +83,16 @@ export const loginSchema = z.object({
  */
 export const PASSWORD_MIN_LENGTH = 12;
 
+/** Granting a collaborator write access to a client. */
+export const grantAccessSchema = z.object({
+  userId: z.string().min(1, "Pick a user"),
+});
+
+/** Reassigning the primary owner. TECHNICAL-only, enforced at the route. */
+export const transferOwnershipSchema = z.object({
+  accountOwnerId: z.string().min(1, "Pick an owner"),
+});
+
 export const changePasswordSchema = z.object({
   currentPassword: z.string().min(1, "Enter your current password"),
   newPassword: z

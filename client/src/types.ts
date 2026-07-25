@@ -233,3 +233,22 @@ export interface RevenueSummary {
   mrrByTier: Partial<Record<ServiceTierType, number>>;
   mrrTrend: MrrTrendPoint[];
 }
+
+/** Who may write to a client. Reads are open to every authenticated user. */
+export interface ClientAccess {
+  owner: User | null;
+  collaborators: (User & { grantedAt: string; grantedBy: { id: string; name: string } | null })[];
+  /** True for the owner and for TECHNICAL — drives whether the controls render. */
+  canManage: boolean;
+}
+
+export interface AuditEntry {
+  id: string;
+  entity: string;
+  entityId: string;
+  field: string;
+  oldValue: string | null;
+  newValue: string | null;
+  changedAt: string;
+  changedBy: { id: string; name: string } | null;
+}

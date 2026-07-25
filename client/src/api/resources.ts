@@ -1,6 +1,8 @@
 import { api, qs } from "./apiClient";
 import type {
+  AuditEntry,
   AutomationRule,
+  ClientAccess,
   ClientDetail,
   ClientListItem,
   Contact,
@@ -61,6 +63,14 @@ export const clientsApi = {
     api.patch<ClientDetail>(`/clients/${id}/tier`, { newTier, note }),
   remove: (id: string) => api.delete<void>(`/clients/${id}`),
   restore: (id: string) => api.post<ClientDetail>(`/clients/${id}/restore`),
+  access: (id: string) => api.get<ClientAccess>(`/clients/${id}/access`),
+  grantAccess: (id: string, userId: string) =>
+    api.post<void>(`/clients/${id}/access`, { userId }),
+  revokeAccess: (id: string, userId: string) =>
+    api.delete<void>(`/clients/${id}/access/${userId}`),
+  transferOwnership: (id: string, accountOwnerId: string) =>
+    api.patch<ClientDetail>(`/clients/${id}/owner`, { accountOwnerId }),
+  audit: (id: string) => api.get<{ entries: AuditEntry[] }>(`/clients/${id}/audit`),
 };
 
 export const contactsApi = {
