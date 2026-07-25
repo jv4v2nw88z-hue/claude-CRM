@@ -30,10 +30,10 @@ function RuleTrigger({ rule }: { rule: AutomationRule }) {
       {rule.triggerTier ? (
         <TierBadge tier={rule.triggerTier} />
       ) : (
-        <span className="text-xs text-slate-500">Any tier</span>
+        <span className="text-xs text-ink/70">Any tier</span>
       )}
       {rule.requiresActiveRetainer && (
-        <p className="mt-1 text-xs text-slate-400">Needs active retainer</p>
+        <p className="mt-1 text-xs text-ink/65">Needs active retainer</p>
       )}
     </>
   );
@@ -49,7 +49,7 @@ function RuleTiming({ rule }: { rule: AutomationRule }) {
       ) : (
         <>{rule.daysAfterTrigger} days after</>
       )}
-      <p className="text-xs text-slate-400">{ANCHOR_LABELS[rule.anchor]}</p>
+      <p className="text-xs text-ink/65">{ANCHOR_LABELS[rule.anchor]}</p>
     </>
   );
 }
@@ -68,11 +68,11 @@ function RuleToggle({ rule, onToggle }: { rule: AutomationRule; onToggle: () => 
     >
       <span
         className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
-          rule.isActive ? "bg-emerald-500" : "bg-slate-300"
+          rule.isActive ? "bg-success" : "bg-fill/40"
         }`}
       >
         <span
-          className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${
+          className={`inline-block h-3.5 w-3.5 transform rounded-full bg-content transition-transform ${
             rule.isActive ? "translate-x-[1.15rem]" : "translate-x-1"
           }`}
         />
@@ -105,8 +105,8 @@ export function AutomationSettings() {
     <div className="space-y-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-xl font-semibold text-slate-900">Automation Rules</h1>
-          <p className="max-w-2xl text-sm text-slate-500">
+          <h1 className="text-xl font-semibold text-ink">Automation Rules</h1>
+          <p className="max-w-2xl text-sm text-ink/70">
             These rules run every morning and create the reminder tasks so nobody has to remember
             them. Change the timing here — no code deploy needed.
           </p>
@@ -125,13 +125,13 @@ export function AutomationSettings() {
       </div>
 
       {runResult && (
-        <div className="flex items-start gap-2 rounded-lg border border-brand-200 bg-brand-50 p-3 text-sm text-brand-900">
+        <div className="flex items-start gap-2 rounded-lg border border-accent/30 bg-accent/10 p-3 text-sm text-accent">
           <Bot className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
           <span className="flex-1">{runResult}</span>
           <button
             type="button"
             onClick={() => setRunResult(null)}
-            className="text-xs font-medium text-brand-700 hover:underline"
+            className="text-xs font-medium text-accent hover:underline"
           >
             Dismiss
           </button>
@@ -175,7 +175,7 @@ export function AutomationSettings() {
                   <button
                     type="button"
                     onClick={() => setEditing(rule)}
-                    className="min-h-11 flex-1 text-left text-sm font-medium text-slate-900"
+                    className="min-h-11 flex-1 text-left text-sm font-medium text-ink"
                   >
                     {rule.name}
                   </button>
@@ -187,36 +187,36 @@ export function AutomationSettings() {
                   />
                 </div>
 
-                <p className="text-xs text-slate-400">{rule.taskTitleTemplate}</p>
+                <p className="text-xs text-ink/65">{rule.taskTitleTemplate}</p>
 
                 <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-sm">
                   <div className="min-w-0">
-                    <dt className="text-xs text-slate-400">Trigger</dt>
+                    <dt className="text-xs text-ink/65">Trigger</dt>
                     <dd className="mt-0.5">
                       <RuleTrigger rule={rule} />
                     </dd>
                   </div>
                   <div className="min-w-0">
-                    <dt className="text-xs text-slate-400">Timing</dt>
-                    <dd className="mt-0.5 text-slate-600">
+                    <dt className="text-xs text-ink/65">Timing</dt>
+                    <dd className="mt-0.5 text-ink/70">
                       <RuleTiming rule={rule} />
                     </dd>
                   </div>
                   <div className="min-w-0">
-                    <dt className="text-xs text-slate-400">Task type</dt>
-                    <dd className="mt-0.5 text-slate-600">{TASK_TYPE_LABELS[rule.taskType]}</dd>
+                    <dt className="text-xs text-ink/65">Task type</dt>
+                    <dd className="mt-0.5 text-ink/70">{TASK_TYPE_LABELS[rule.taskType]}</dd>
                   </div>
                   <div className="min-w-0">
-                    <dt className="text-xs text-slate-400">Tasks generated</dt>
-                    <dd className="mt-0.5 text-slate-600">{rule._count?.generatedTasks ?? 0}</dd>
+                    <dt className="text-xs text-ink/65">Tasks generated</dt>
+                    <dd className="mt-0.5 text-ink/70">{rule._count?.generatedTasks ?? 0}</dd>
                   </div>
                 </dl>
 
-                <div className="mt-3 flex justify-end border-t border-slate-100 pt-1">
+                <div className="mt-3 flex justify-end border-t border-separator/50 pt-1">
                   <button
                     type="button"
                     onClick={() => setConfirmDelete(rule)}
-                    className="inline-flex min-h-11 items-center gap-1.5 rounded-lg px-3 text-sm font-medium text-slate-500 hover:bg-red-50 hover:text-red-600"
+                    className="inline-flex min-h-11 items-center gap-1.5 rounded-lg px-3 text-sm font-medium text-ink/70 hover:bg-danger/10 hover:text-danger"
                   >
                     <Trash2 className="h-4 w-4" aria-hidden />
                     Delete
@@ -228,7 +228,7 @@ export function AutomationSettings() {
 
           <Card className="hidden overflow-x-auto lg:block">
           <table className="w-full text-left text-sm">
-            <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+            <thead className="border-b border-separator/70 bg-fill/8 text-xs uppercase tracking-wide text-ink/70">
               <tr>
                 <th scope="col" className="px-4 py-2.5 font-medium">Rule</th>
                 <th scope="col" className="px-4 py-2.5 font-medium">Trigger</th>
@@ -238,14 +238,14 @@ export function AutomationSettings() {
                 <th scope="col" className="px-4 py-2.5"><span className="sr-only">Actions</span></th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-separator/50">
               {rulesQuery.data?.map((rule) => (
                 <tr key={rule.id} className={rule.isActive ? "" : "opacity-50"}>
                   <td className="px-4 py-3">
                     <button
                       type="button"
                       onClick={() => setEditing(rule)}
-                      className="text-left font-medium text-slate-900 hover:text-brand-700"
+                      className="text-left font-medium text-ink hover:text-accent"
                     >
                       {rule.name}
                     </button>
@@ -254,11 +254,11 @@ export function AutomationSettings() {
                         becomes the full template string and the column refuses
                         to compress. Clamping to one line ellipsises the same way
                         while letting the column shrink. */}
-                    <p className="mt-0.5 line-clamp-1 max-w-md text-xs text-slate-400">
+                    <p className="mt-0.5 line-clamp-1 max-w-md text-xs text-ink/65">
                       {rule.taskTitleTemplate}
                     </p>
                     {(rule._count?.generatedTasks ?? 0) > 0 && (
-                      <p className="mt-0.5 text-xs text-slate-400">
+                      <p className="mt-0.5 text-xs text-ink/65">
                         {rule._count?.generatedTasks} task
                         {rule._count?.generatedTasks === 1 ? "" : "s"} generated
                       </p>
@@ -269,11 +269,11 @@ export function AutomationSettings() {
                     <RuleTrigger rule={rule} />
                   </td>
 
-                  <td className="px-4 py-3 text-slate-600">
+                  <td className="px-4 py-3 text-ink/70">
                     <RuleTiming rule={rule} />
                   </td>
 
-                  <td className="px-4 py-3 text-slate-600">{TASK_TYPE_LABELS[rule.taskType]}</td>
+                  <td className="px-4 py-3 text-ink/70">{TASK_TYPE_LABELS[rule.taskType]}</td>
 
                   <td className="px-4 py-3 text-center">
                     <RuleToggle
@@ -288,7 +288,7 @@ export function AutomationSettings() {
                     <button
                       type="button"
                       onClick={() => setConfirmDelete(rule)}
-                      className="rounded p-2 text-slate-300 hover:bg-red-50 hover:text-red-600"
+                      className="rounded p-2 text-ink/55 hover:bg-danger/10 hover:text-danger"
                       aria-label={`Delete ${rule.name}`}
                     >
                       <Trash2 className="h-4 w-4" aria-hidden />
@@ -486,12 +486,12 @@ function RulePanel({
           />
         </Field>
 
-        <label className="flex items-center gap-2 text-sm text-slate-700">
+        <label className="flex items-center gap-2 text-sm text-ink/80">
           <input
             type="checkbox"
             checked={requiresActiveRetainer}
             onChange={(e) => setRequiresActiveRetainer(e.target.checked)}
-            className="h-4 w-4 rounded border-slate-300 text-brand-700"
+            className="h-4 w-4 rounded border-separator text-accent"
           />
           Only fire for clients with an active retainer
         </label>
@@ -525,7 +525,7 @@ function RulePanel({
           </select>
         </Field>
 
-        {error && <p className="text-sm text-red-600">{error}</p>}
+        {error && <p className="text-sm text-danger">{error}</p>}
       </form>
     </SlideOverPanel>
   );

@@ -46,10 +46,10 @@ export function Dashboard() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-xl font-semibold text-slate-900">
+        <h1 className="text-xl font-semibold text-ink">
           {greeting()}{user ? `, ${user.name}` : ""}
         </h1>
-        <p className="text-sm text-slate-500">Here's what needs attention today.</p>
+        <p className="text-sm text-ink/70">Here's what needs attention today.</p>
       </div>
 
       {summaryQuery.isError && (
@@ -108,7 +108,7 @@ export function Dashboard() {
             title="My Tasks"
             description="Assigned to you, soonest first."
             action={
-              <Link to="/tasks" className="text-xs font-medium text-brand-700 hover:underline">
+              <Link to="/tasks" className="text-xs font-medium text-accent hover:underline">
                 View all tasks
               </Link>
             }

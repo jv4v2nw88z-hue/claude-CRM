@@ -67,45 +67,54 @@ export function Layout() {
           onClick={() => setMobileNavOpen(false)}
           className={({ isActive }) =>
             clsx(
-              // min-h-11 gives a 44px touch target in the mobile drawer; the
-              // desktop sidebar is mouse-driven and can stay compact.
-              "flex min-h-11 items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors lg:min-h-9",
-              isActive
-                ? "bg-brand-700 text-white"
-                : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+              // .sidebar-item carries the 44px touch target and the compact
+              // desktop height; see index.css.
+              "sidebar-item",
+              isActive ? "sidebar-item-active" : "sidebar-item-idle"
             )
           }
         >
-          <item.icon className="h-4 w-4 shrink-0" aria-hidden />
-          {item.label}
+          {({ isActive }) => (
+            <>
+              {/* macOS tints sidebar glyphs with the accent when idle, and drops
+                  them to the selection's foreground colour when active. */}
+              <item.icon
+                className={clsx("h-4 w-4 shrink-0", !isActive && "text-accent")}
+                aria-hidden
+              />
+              {item.label}
+            </>
+          )}
         </NavLink>
       ))}
     </nav>
   );
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      {/* Mobile top bar — Cole updates things from his phone after calls. */}
-      <header className="sticky top-0 z-30 flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3 lg:hidden">
+    <div className="min-h-screen bg-window">
+      {/* Mobile toolbar — Cole updates things from his phone after calls. Uses
+          the same blurred material a macOS window's titlebar does, so content
+          scrolls under it rather than colliding with it. */}
+      <header className="toolbar flex items-center justify-between px-4 py-2 lg:hidden">
         <button
           ref={menuButtonRef}
           type="button"
           onClick={() => setMobileNavOpen(true)}
-          className="-ml-2 flex h-11 w-11 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100"
+          className="-ml-2 flex h-11 w-11 items-center justify-center rounded-control text-ink/70 hover:bg-fill/15"
           aria-label="Open navigation"
           aria-expanded={mobileNavOpen}
           aria-controls="mobile-nav"
         >
           <Menu className="h-5 w-5" aria-hidden />
         </button>
-        <span className="text-sm font-semibold text-slate-900">MiDigitalExpansion</span>
+        <span className="text-sm font-semibold text-ink">MiDigitalExpansion</span>
         {user && <Avatar label={initials(user.name)} className="h-7 w-7" />}
       </header>
 
       {mobileNavOpen && (
         <div className="fixed inset-0 z-40 lg:hidden">
           <div
-            className="absolute inset-0 bg-slate-900/30"
+            className="absolute inset-0 bg-black/30"
             onClick={() => setMobileNavOpen(false)}
             aria-hidden
           />
@@ -114,7 +123,7 @@ export function Layout() {
             role="dialog"
             aria-modal="true"
             aria-label="Navigation"
-            className="relative flex h-full w-72 max-w-[85vw] animate-slide-in flex-col bg-white p-4 shadow-xl"
+            className="material relative flex h-full w-72 max-w-[85vw] animate-slide-in flex-col p-3 shadow-sheet"
           >
             <div className="mb-4 flex items-center justify-between">
               <Brand />
@@ -122,7 +131,7 @@ export function Layout() {
                 ref={closeButtonRef}
                 type="button"
                 onClick={() => setMobileNavOpen(false)}
-                className="-mr-2 flex h-11 w-11 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100"
+                className="-mr-2 flex h-11 w-11 items-center justify-center rounded-control text-ink/65 hover:bg-fill/15"
                 aria-label="Close navigation"
               >
                 <X className="h-5 w-5" aria-hidden />
@@ -139,11 +148,18 @@ export function Layout() {
       )}
 
       <div className="flex">
-        {/* Desktop sidebar — the primary design target is a laptop browser. */}
-        <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r border-slate-200 bg-white p-4 lg:flex">
+        {/*
+          Desktop sidebar. A translucent vibrancy material rather than an opaque
+          panel — the defining surface of a macOS window, and the reason the
+          window background sits behind everything instead of white.
+        */}
+        <aside className="material sticky top-0 hidden h-screen w-[15rem] shrink-0 flex-col border-r border-separator/60 p-3 lg:flex">
           <Brand />
 
-          <div className="mt-6 flex-1">{nav}</div>
+          <div className="mt-5 flex-1">
+            <p className="sidebar-heading">Workspace</p>
+            {nav}
+          </div>
 
           {user && <UserFooter user={user} onLogout={logout} />}
         </aside>
@@ -165,18 +181,18 @@ function UserFooter({
   onLogout: () => Promise<void>;
 }) {
   return (
-    <div className="border-t border-slate-200 pt-3">
+    <div className="border-t border-separator/70 pt-3">
       <div className="flex items-center gap-2.5 px-1">
         <Avatar label={initials(user.name)} />
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium text-slate-900">{user.name}</p>
-          <p className="truncate text-xs capitalize text-slate-500">{user.role.toLowerCase()}</p>
+          <p className="truncate text-sm font-medium text-ink">{user.name}</p>
+          <p className="truncate text-xs capitalize text-ink/70">{user.role.toLowerCase()}</p>
         </div>
       </div>
       <button
         type="button"
         onClick={() => void onLogout()}
-        className="mt-2 flex min-h-11 w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-900 lg:min-h-9"
+        className="mt-2 flex min-h-11 w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium text-ink/70 hover:bg-fill/15 hover:text-ink lg:min-h-9"
       >
         <LogOut className="h-4 w-4" aria-hidden />
         Log out
@@ -188,12 +204,12 @@ function UserFooter({
 function Brand() {
   return (
     <div className="flex items-center gap-2">
-      <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-700 text-sm font-bold text-white">
+      <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent text-sm font-bold text-accent-ink">
         Mi
       </span>
       <div className="leading-tight">
-        <p className="text-sm font-semibold text-slate-900">MiDigitalExpansion</p>
-        <p className="text-xs text-slate-400">CRM</p>
+        <p className="text-sm font-semibold text-ink">MiDigitalExpansion</p>
+        <p className="text-xs text-ink/65">CRM</p>
       </div>
     </div>
   );

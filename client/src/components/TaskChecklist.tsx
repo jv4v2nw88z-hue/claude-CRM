@@ -92,8 +92,8 @@ export function TaskChecklist({
           <h3
             className={
               group.key === "Overdue"
-                ? "mb-2 text-xs font-semibold uppercase tracking-wide text-red-600"
-                : "mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400"
+                ? "mb-2 text-xs font-semibold uppercase tracking-wide text-danger"
+                : "mb-2 text-xs font-semibold uppercase tracking-wide text-ink/65"
             }
           >
             {group.key}

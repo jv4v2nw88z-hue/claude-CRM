@@ -42,8 +42,8 @@ export function ClientsList() {
     <div className="space-y-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-xl font-semibold text-slate-900">Clients</h1>
-          <p className="text-sm text-slate-500">
+          <h1 className="text-xl font-semibold text-ink">Clients</h1>
+          <p className="text-sm text-ink/70">
             {clients.length} {clients.length === 1 ? "client" : "clients"}
             {clients.length > 0 && (
               <> · {formatCurrency(clients.reduce((sum, c) => sum + c.mrr, 0))} MRR</>
@@ -62,7 +62,7 @@ export function ClientsList() {
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative min-w-[12rem] flex-1 sm:max-w-xs">
             <Search
-              className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
+              className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink/65"
               aria-hidden
             />
             <input
@@ -81,8 +81,8 @@ export function ClientsList() {
             className={clsx(
               "inline-flex min-h-9 items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors lg:min-h-0",
               atRiskOnly
-                ? "border-amber-300 bg-amber-100 text-amber-900"
-                : "border-slate-300 bg-white text-slate-600 hover:bg-slate-50"
+                ? "border-warning/40 bg-warning/15 text-warning"
+                : "border-separator bg-content text-ink/70 hover:bg-fill/8"
             )}
             aria-pressed={atRiskOnly}
           >
@@ -147,7 +147,7 @@ export function ClientsList() {
 
           <Card className="hidden overflow-hidden lg:block">
             <table className="w-full text-left text-sm">
-              <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+              <thead className="border-b border-separator/70 bg-fill/8 text-xs uppercase tracking-wide text-ink/70">
                 <tr>
                   <th scope="col" className="px-4 py-2.5 font-medium">Business</th>
                   <th scope="col" className="px-4 py-2.5 font-medium">Tier</th>
@@ -157,18 +157,18 @@ export function ClientsList() {
                   <th scope="col" className="px-4 py-2.5 font-medium">Next task</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody className="divide-y divide-separator/50">
                 {clients.map((client) => (
-                  <tr key={client.id} className="hover:bg-slate-50">
+                  <tr key={client.id} className="hover:bg-fill/8">
                     <td className="px-4 py-3">
                       <Link to={`/clients/${client.id}`} className="flex items-center gap-2.5 group">
                         <Avatar label={initials(client.businessName)} className="h-7 w-7" />
                         <span className="min-w-0">
-                          <span className="block truncate font-medium text-slate-900 group-hover:text-brand-700">
+                          <span className="block truncate font-medium text-ink group-hover:text-accent">
                             {client.businessName}
                           </span>
                           {client.industry && (
-                            <span className="block truncate text-xs text-slate-400">
+                            <span className="block truncate text-xs text-ink/65">
                               {client.industry}
                             </span>
                           )}
@@ -180,7 +180,7 @@ export function ClientsList() {
                         <TierBadge tier={client.currentTier} />
                         {client.isAtRisk && (
                           <span
-                            className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800"
+                            className="inline-flex items-center gap-1 rounded-full bg-warning/15 px-2 py-0.5 text-xs font-medium text-warning"
                             title={`Live ${client.daysSinceLaunch} days with no active retainer`}
                           >
                             <AlertTriangle className="h-3 w-3" aria-hidden />
@@ -191,24 +191,24 @@ export function ClientsList() {
                     </td>
                     <td className="px-4 py-3 text-right font-medium tabular-nums">
                       {client.mrr > 0 ? (
-                        <span className="text-emerald-600">{formatCurrency(client.mrr)}</span>
+                        <span className="text-success">{formatCurrency(client.mrr)}</span>
                       ) : (
-                        <span className="text-slate-300">—</span>
+                        <span className="text-ink/55">—</span>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-slate-600">
+                    <td className="px-4 py-3 text-ink/70">
                       {client.accountOwner?.name ?? "—"}
                     </td>
-                    <td className="px-4 py-3 text-slate-500">
+                    <td className="px-4 py-3 text-ink/70">
                       {client.lastInteractionAt ? formatRelative(client.lastInteractionAt) : "Never"}
                     </td>
                     <td className="max-w-[16rem] px-4 py-3">
                       {client.nextTask ? (
-                        <span className="block truncate text-slate-600" title={client.nextTask.title}>
+                        <span className="block truncate text-ink/70" title={client.nextTask.title}>
                           {client.nextTask.title}
                         </span>
                       ) : (
-                        <span className="text-slate-300">—</span>
+                        <span className="text-ink/55">—</span>
                       )}
                     </td>
                   </tr>
@@ -243,8 +243,8 @@ function FilterPill({
         // the desktop filter row feel oversized.
         "inline-flex min-h-9 items-center rounded-full border px-3 py-1 text-xs font-medium transition-colors lg:min-h-0",
         active
-          ? "border-brand-700 bg-brand-700 text-white"
-          : "border-slate-300 bg-white text-slate-600 hover:bg-slate-50"
+          ? "border-accent bg-accent text-accent-ink"
+          : "border-separator bg-content text-ink/70 hover:bg-fill/8"
       )}
     >
       {children}
@@ -366,7 +366,7 @@ function NewClientPanel({ open, onClose }: { open: boolean; onClose: () => void 
           </select>
         </Field>
 
-        {error && <p className="text-sm text-red-600">{error}</p>}
+        {error && <p className="text-sm text-danger">{error}</p>}
       </form>
     </SlideOverPanel>
   );

@@ -109,11 +109,11 @@ export function PitchNowModal({ open, clientId, businessName, onClose }: PitchNo
             />
           </div>
 
-          <p className="text-xs text-slate-500">
+          <p className="text-xs text-ink/70">
             This logs the interaction and marks any open upsell task for {businessName} as done.
           </p>
 
-          {error && <p className="text-xs text-red-600">{error}</p>}
+          {error && <p className="text-xs text-danger">{error}</p>}
         </div>
       }
     />

@@ -24,7 +24,7 @@ export function DealCard({ deal, onOpen, isOverlay = false }: DealCardProps) {
       ref={setNodeRef}
       style={{ transform: CSS.Translate.toString(transform) }}
       className={clsx(
-        "rounded-lg border border-slate-200 bg-white p-3 shadow-sm",
+        "rounded-lg border border-separator/70 bg-content p-3 shadow-sm",
         isDragging && "opacity-40",
         isOverlay && "rotate-2 shadow-lg"
       )}
@@ -35,7 +35,7 @@ export function DealCard({ deal, onOpen, isOverlay = false }: DealCardProps) {
           // A 16px grip is hard to hit with a thumb and it is the only way to
           // move a deal between stages, so the target is 44px on touch.
           className="-my-1.5 -ml-1.5 flex h-11 w-11 shrink-0 cursor-grab touch-none items-center
-                     justify-center rounded text-slate-300 hover:text-slate-500
+                     justify-center rounded text-ink/55 hover:text-ink/70
                      active:cursor-grabbing lg:-my-0 lg:-ml-0 lg:mt-0.5 lg:h-6 lg:w-6"
           aria-label={`Drag ${deal.businessName}`}
           {...listeners}
@@ -49,10 +49,10 @@ export function DealCard({ deal, onOpen, isOverlay = false }: DealCardProps) {
           onClick={() => onOpen(deal)}
           className="min-w-0 flex-1 text-left"
         >
-          <p className="truncate text-sm font-medium text-slate-900">{deal.businessName}</p>
+          <p className="truncate text-sm font-medium text-ink">{deal.businessName}</p>
 
           {deal.contactName && (
-            <p className="mt-0.5 flex items-center gap-1 truncate text-xs text-slate-500">
+            <p className="mt-0.5 flex items-center gap-1 truncate text-xs text-ink/70">
               <User className="h-3 w-3 shrink-0" aria-hidden />
               {deal.contactName}
             </p>
@@ -60,18 +60,18 @@ export function DealCard({ deal, onOpen, isOverlay = false }: DealCardProps) {
 
           <div className="mt-2 flex flex-wrap items-center gap-1.5">
             {deal.estimatedValue !== null && (
-              <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-xs font-medium tabular-nums text-emerald-700">
+              <span className="rounded bg-success/10 px-1.5 py-0.5 text-xs font-medium tabular-nums text-success">
                 {formatCurrency(deal.estimatedValue)}
               </span>
             )}
             {deal.source && (
-              <span className="rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-600">
+              <span className="rounded bg-fill/15 px-1.5 py-0.5 text-xs text-ink/70">
                 {deal.source}
               </span>
             )}
           </div>
 
-          <p className="mt-2 text-xs text-slate-400">
+          <p className="mt-2 text-xs text-ink/65">
             {daysInStage === 0 ? "Moved today" : `${daysInStage}d in stage`}
           </p>
         </button>

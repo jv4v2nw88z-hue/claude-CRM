@@ -27,17 +27,22 @@ export function Login() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
+    <div className="flex min-h-screen items-center justify-center bg-window px-4">
       <div className="w-full max-w-sm">
         <div className="mb-6 flex flex-col items-center">
-          <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-700 text-base font-bold text-white">
+          <span className="flex h-11 w-11 items-center justify-center rounded-sheet bg-accent text-base font-bold text-accent-ink">
             Mi
           </span>
-          <h1 className="mt-3 text-lg font-semibold text-slate-900">MiDigitalExpansion CRM</h1>
-          <p className="text-sm text-slate-500">Sign in to keep the ladder moving.</p>
+          <h1 className="mt-3 text-lg font-semibold text-ink">MiDigitalExpansion CRM</h1>
+          <p className="text-sm text-ink/70">Sign in to keep the ladder moving.</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="card space-y-4 p-6">
+        {/* A macOS sheet rather than a card: larger radius, a real drop shadow,
+            and it drops in from above instead of fading in place. */}
+        <form
+          onSubmit={handleSubmit}
+          className="animate-sheet-in space-y-4 rounded-sheet border border-separator/70 bg-content p-6 shadow-sheet"
+        >
           <Field label="Email" htmlFor="email">
             <input
               id="email"
@@ -64,7 +69,7 @@ export function Login() {
           </Field>
 
           {error && (
-            <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">
+            <p className="rounded-lg bg-danger/10 px-3 py-2 text-sm text-danger" role="alert">
               {error}
             </p>
           )}
@@ -75,7 +80,7 @@ export function Login() {
         </form>
 
         {/* No self-service signup: accounts are created by the seed script. */}
-        <p className="mt-4 text-center text-xs text-slate-400">
+        <p className="mt-4 text-center text-xs text-ink/65">
           Accounts are provisioned internally. Ask Brian if you need access.
         </p>
       </div>

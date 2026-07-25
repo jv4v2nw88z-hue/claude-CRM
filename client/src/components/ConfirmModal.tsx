@@ -45,10 +45,10 @@ export function ConfirmModal({
       role="dialog"
       aria-modal="true"
     >
-      <div className="absolute inset-0 animate-fade-in bg-slate-900/40" onClick={onCancel} aria-hidden />
-      <div className="relative w-full max-w-md animate-fade-in rounded-xl bg-white p-5 shadow-xl">
-        <h2 className="text-base font-semibold text-slate-900">{title}</h2>
-        {body && <div className="mt-2 text-sm text-slate-600">{body}</div>}
+      <div className="absolute inset-0 animate-fade-in bg-black/40" onClick={onCancel} aria-hidden />
+      <div className="relative w-full max-w-md animate-fade-in rounded-xl bg-content p-5 shadow-xl">
+        <h2 className="text-base font-semibold text-ink">{title}</h2>
+        {body && <div className="mt-2 text-sm text-ink/70">{body}</div>}
         <div className="mt-5 flex justify-end gap-2">
           <Button variant="secondary" onClick={onCancel} disabled={loading}>
             {cancelLabel}

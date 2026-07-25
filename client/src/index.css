@@ -2,38 +2,214 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * macOS appearance tokens.
+ *
+ * Values are RGB channels so Tailwind's `/opacity` modifiers work on them. The
+ * light set is Sonoma's window/content/sidebar stack; the dark set is its dark
+ * appearance, where surfaces get *lighter* as they come forward rather than
+ * darker, which is the thing that most distinguishes a real dark UI from an
+ * inverted light one.
+ */
 @layer base {
+  :root {
+    color-scheme: light;
+
+    --c-window: 236 236 240;
+    --c-content: 255 255 255;
+    --c-elevated: 255 255 255;
+    --c-sidebar: 245 245 247;
+
+    --c-ink: 29 29 31;
+    --c-separator: 198 198 204;
+    --c-fill: 120 120 128;
+
+    /* The brand indigo, one step brighter than #3730A3 so it holds up as a fill
+       against white without going murky. */
+    --c-accent: 67 56 202;
+    --c-accent-hover: 55 48 163;
+    --c-accent-ink: 255 255 255;
+
+    --c-status-ink: 255 255 255;
+    --c-danger: 185 28 28;
+    --c-warning: 138 79 4;
+    --c-success: 21 111 66;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      color-scheme: dark;
+
+      --c-window: 24 24 26;
+      --c-content: 44 44 46;
+      --c-elevated: 58 58 60;
+      --c-sidebar: 32 32 34;
+
+      --c-ink: 245 245 247;
+      --c-separator: 84 84 88;
+      --c-fill: 142 142 147;
+
+      /* Deep indigo is unreadable on a dark surface; this is the same hue lifted
+         until it passes contrast as both a fill and a text colour. */
+      --c-accent: 157 149 252;
+      --c-accent-hover: 174 168 253;
+      --c-accent-ink: 20 20 24;
+
+      --c-status-ink: 24 24 28;
+      --c-danger: 255 105 97;
+      --c-warning: 255 179 64;
+      --c-success: 63 208 129;
+    }
+  }
+
   html {
-    font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
     -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 
   body {
-    @apply bg-slate-50 text-slate-900;
+    @apply bg-window text-ink;
+    /* macOS sets body text a touch tighter than the web default. */
+    letter-spacing: -0.01em;
   }
 
   /* Every focusable thing gets the same visible ring — this tool is used all day
      with a keyboard, and a lost focus outline costs more than it saves. */
   *:focus-visible {
-    @apply outline-none ring-2 ring-brand-500 ring-offset-2 ring-offset-slate-50;
+    @apply outline-none ring-2 ring-accent ring-offset-2 ring-offset-window;
+  }
+
+  /* Headings in macOS are semibold and tight, never bold and wide. */
+  h1,
+  h2,
+  h3 {
+    letter-spacing: -0.02em;
   }
 }
 
 @layer components {
+  /*
+   * A grouped box — the System Settings container. Hairline plus a barely-there
+   * drop, rather than the web's heavier card shadow.
+   */
   .card {
-    @apply rounded-xl border border-slate-200 bg-white shadow-sm;
+    @apply rounded-box border border-separator/70 bg-content shadow-box;
   }
 
-  /* min-h-11 keeps every text field a comfortable 44px on touch; the desktop
-     breakpoint drops back to the tighter 38px the forms were designed around. */
+  /*
+   * Text field with a macOS bezel. min-h-11 keeps it a comfortable 44px on
+   * touch; the desktop breakpoint drops back to the tighter height the forms
+   * were designed around.
+   */
   .input {
-    @apply min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900
-           placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500
-           disabled:cursor-not-allowed disabled:bg-slate-50 lg:min-h-0;
+    @apply min-h-11 w-full rounded-control border border-separator bg-content px-2.5 py-1.5 text-sm
+           text-ink shadow-[inset_0_1px_1px_rgb(0_0_0/0.04)] placeholder:text-ink/55
+           focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/35
+           disabled:cursor-not-allowed disabled:bg-fill/10 disabled:text-ink/40 lg:min-h-0;
   }
 
   .label {
-    @apply mb-1 block text-xs font-medium text-slate-600;
+    @apply mb-1 block text-xs font-medium text-ink/70;
+  }
+
+  /*
+   * Bezel button: the default push button, a soft gradient with a hairline. The
+   * accent variant is the "default" button — the one Return activates.
+   */
+  .btn {
+    @apply inline-flex min-h-11 select-none items-center justify-center gap-1.5 rounded-control
+           px-3 text-sm font-medium transition-colors disabled:cursor-not-allowed
+           disabled:opacity-40 lg:min-h-8;
+  }
+
+  .btn-accent {
+    @apply bg-accent text-accent-ink shadow-[0_1px_1px_rgb(0_0_0/0.10)] hover:bg-accent-hover;
+  }
+
+  .btn-bezel {
+    @apply border border-separator bg-content text-ink shadow-[0_1px_1px_rgb(0_0_0/0.04)]
+           hover:bg-fill/10;
+  }
+
+  .btn-plain {
+    @apply text-ink/70 hover:bg-fill/12 hover:text-ink;
+  }
+
+  .btn-danger {
+    @apply bg-danger text-status-ink hover:opacity-90;
+  }
+
+  /*
+   * Segmented control. macOS draws a recessed track with a single raised,
+   * shadowed segment for the selection — not a coloured pill.
+   */
+  .segmented {
+    @apply inline-flex gap-0.5 rounded-control bg-fill/12 p-0.5;
+  }
+
+  .segmented-item {
+    @apply inline-flex min-h-8 items-center justify-center rounded-[4px] px-2.5 text-xs
+           font-medium text-ink/75 transition-colors hover:text-ink lg:min-h-7;
+  }
+
+  .segmented-item-active {
+    @apply bg-content text-ink shadow-[0_1px_2px_rgb(0_0_0/0.10)] hover:text-ink;
+  }
+
+  /*
+   * Sidebar row. Selection is a filled accent rounded-6, which is the single
+   * most recognisable piece of macOS chrome.
+   */
+  .sidebar-item {
+    @apply flex min-h-11 items-center gap-2.5 rounded-control px-2 text-sm font-medium
+           text-ink/80 transition-colors lg:min-h-8;
+  }
+
+  .sidebar-item-active {
+    @apply bg-accent text-accent-ink;
+  }
+
+  .sidebar-item-idle {
+    @apply hover:bg-fill/15 hover:text-ink;
+  }
+
+  /* Sidebar section label — uppercase, tiny, tertiary. */
+  .sidebar-heading {
+    @apply px-2 pb-1 pt-3 text-[11px] font-semibold uppercase tracking-wider text-ink/65;
+  }
+
+  /*
+   * Vibrancy. A translucent surface over the window with a heavy backdrop blur,
+   * falling back to an opaque surface where backdrop-filter is unsupported.
+   */
+  .material {
+    @apply bg-sidebar;
+  }
+
+  @supports (backdrop-filter: blur(24px)) {
+    .material {
+      background-color: rgb(var(--c-sidebar) / 0.72);
+      backdrop-filter: blur(24px) saturate(180%);
+      -webkit-backdrop-filter: blur(24px) saturate(180%);
+    }
+  }
+
+  /* Toolbar: the blurred strip a macOS window's content scrolls under. */
+  .toolbar {
+    @apply sticky top-0 z-30 border-b border-separator/70;
+  }
+
+  @supports (backdrop-filter: blur(24px)) {
+    .toolbar {
+      background-color: rgb(var(--c-window) / 0.8);
+      backdrop-filter: blur(24px) saturate(180%);
+      -webkit-backdrop-filter: blur(24px) saturate(180%);
+    }
+  }
+
+  /* Inset grouped list, as in System Settings: rows divided by hairlines. */
+  .list-group {
+    @apply divide-y divide-separator/60 overflow-hidden rounded-box border border-separator/70 bg-content;
   }
 }
 
@@ -57,6 +233,18 @@
   }
 }
 
+/* Sheets in macOS drop from the titlebar rather than fading in place. */
+@keyframes sheet-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
 .animate-slide-in {
   animation: slide-in-right 0.18s ease-out;
 }
@@ -65,9 +253,14 @@
   animation: fade-in 0.15s ease-out;
 }
 
+.animate-sheet-in {
+  animation: sheet-in 0.22s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .animate-slide-in,
-  .animate-fade-in {
+  .animate-fade-in,
+  .animate-sheet-in {
     animation: none;
   }
 }

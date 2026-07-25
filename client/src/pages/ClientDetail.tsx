@@ -95,7 +95,7 @@ export function ClientDetail() {
     <div className="space-y-5">
       <Link
         to="/clients"
-        className="inline-flex items-center gap-1 text-xs font-medium text-slate-500 hover:text-brand-700"
+        className="inline-flex items-center gap-1 text-xs font-medium text-ink/70 hover:text-accent"
       >
         ← Back to clients
       </Link>
@@ -104,7 +104,7 @@ export function ClientDetail() {
         <ClientSidebar client={client} onOpenPanel={setPanel} />
 
         <div className="min-w-0">
-          <div className="mb-4 flex gap-1 overflow-x-auto border-b border-slate-200">
+          <div className="mb-4 flex gap-1 overflow-x-auto border-b border-separator/70">
             {TABS.map((name) => (
               <button
                 key={name}
@@ -113,13 +113,13 @@ export function ClientDetail() {
                 className={clsx(
                   "-mb-px shrink-0 border-b-2 px-3 py-2 text-sm font-medium transition-colors",
                   tab === name
-                    ? "border-brand-700 text-brand-700"
-                    : "border-transparent text-slate-500 hover:text-slate-800"
+                    ? "border-brand-700 text-accent"
+                    : "border-transparent text-ink/70 hover:text-ink"
                 )}
               >
                 {name}
                 {name === "Tasks" && openTaskCount(client) > 0 && (
-                  <span className="ml-1.5 rounded-full bg-slate-100 px-1.5 py-0.5 text-xs text-slate-600">
+                  <span className="ml-1.5 rounded-full bg-fill/15 px-1.5 py-0.5 text-xs text-ink/70">
                     {openTaskCount(client)}
                   </span>
                 )}
@@ -193,10 +193,10 @@ function ClientSidebar({
         <div className="flex items-start gap-3">
           <Avatar label={initials(client.businessName)} className="h-11 w-11 text-sm" />
           <div className="min-w-0">
-            <h1 className="text-lg font-semibold leading-tight text-slate-900">
+            <h1 className="text-lg font-semibold leading-tight text-ink">
               {client.businessName}
             </h1>
-            {client.industry && <p className="text-xs text-slate-500">{client.industry}</p>}
+            {client.industry && <p className="text-xs text-ink/70">{client.industry}</p>}
           </div>
         </div>
 
@@ -205,14 +205,14 @@ function ClientSidebar({
             href={client.websiteUrl}
             target="_blank"
             rel="noreferrer noopener"
-            className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-brand-700 hover:underline"
+            className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-accent hover:underline"
           >
             Visit site
             <ExternalLink className="h-3 w-3" aria-hidden />
           </a>
         )}
 
-        <div className="mt-4 border-t border-slate-100 pt-4">
+        <div className="mt-4 border-t border-separator/50 pt-4">
           <p className="label">Current tier</p>
           <TierBadge tier={client.currentTier} size="lg" />
           <Button
@@ -226,25 +226,25 @@ function ClientSidebar({
           </Button>
         </div>
 
-        <div className="mt-4 border-t border-slate-100 pt-4">
+        <div className="mt-4 border-t border-separator/50 pt-4">
           <p className="label">Current MRR</p>
-          <p className="text-2xl font-semibold tabular-nums text-emerald-600">
+          <p className="text-2xl font-semibold tabular-nums text-success">
             {formatCurrency(client.mrr)}
           </p>
           {client.mrr === 0 && (
-            <p className="mt-0.5 text-xs text-slate-400">No active retainer yet.</p>
+            <p className="mt-0.5 text-xs text-ink/65">No active retainer yet.</p>
           )}
         </div>
 
         {client.websiteLaunchDate && (
-          <div className="mt-4 border-t border-slate-100 pt-4">
+          <div className="mt-4 border-t border-separator/50 pt-4">
             <p className="label">Website launched</p>
-            <p className="text-sm text-slate-800">{formatDate(client.websiteLaunchDate)}</p>
+            <p className="text-sm text-ink">{formatDate(client.websiteLaunchDate)}</p>
             {client.currentTier === "WEBSITE_LIVE" && client.daysSinceLaunch !== null && (
               <p
                 className={clsx(
                   "mt-1 text-xs font-medium",
-                  client.isAtRisk ? "text-amber-700" : "text-slate-500"
+                  client.isAtRisk ? "text-warning" : "text-ink/70"
                 )}
               >
                 {client.isAtRisk ? (
@@ -261,40 +261,40 @@ function ClientSidebar({
         )}
 
         {client.accountOwner && (
-          <div className="mt-4 border-t border-slate-100 pt-4">
+          <div className="mt-4 border-t border-separator/50 pt-4">
             <p className="label">Account owner</p>
             <div className="flex items-center gap-2">
               <Avatar label={initials(client.accountOwner.name)} className="h-6 w-6" tone="slate" />
-              <span className="text-sm text-slate-800">{client.accountOwner.name}</span>
+              <span className="text-sm text-ink">{client.accountOwner.name}</span>
             </div>
           </div>
         )}
 
-        <div className="mt-4 border-t border-slate-100 pt-4">
+        <div className="mt-4 border-t border-separator/50 pt-4">
           <div className="mb-1.5 flex items-center justify-between">
             <p className="label mb-0">Primary contact</p>
             <button
               type="button"
               onClick={() => onOpenPanel("contact")}
-              className="text-xs font-medium text-brand-700 hover:underline"
+              className="text-xs font-medium text-accent hover:underline"
             >
               Add
             </button>
           </div>
 
           {primaryContact ? (
-            <div className="rounded-lg bg-slate-50 p-3">
-              <p className="text-sm font-medium text-slate-900">
+            <div className="rounded-lg bg-fill/8 p-3">
+              <p className="text-sm font-medium text-ink">
                 {primaryContact.firstName} {primaryContact.lastName}
               </p>
               {primaryContact.title && (
-                <p className="text-xs text-slate-500">{primaryContact.title}</p>
+                <p className="text-xs text-ink/70">{primaryContact.title}</p>
               )}
               <div className="mt-2 space-y-1">
                 {primaryContact.phone && (
                   <a
                     href={`tel:${primaryContact.phone}`}
-                    className="flex items-center gap-1.5 text-xs text-brand-700 hover:underline"
+                    className="flex items-center gap-1.5 text-xs text-accent hover:underline"
                   >
                     <Phone className="h-3 w-3" aria-hidden />
                     {primaryContact.phone}
@@ -303,7 +303,7 @@ function ClientSidebar({
                 {primaryContact.email && (
                   <a
                     href={`mailto:${primaryContact.email}`}
-                    className="flex items-center gap-1.5 break-all text-xs text-brand-700 hover:underline"
+                    className="flex items-center gap-1.5 break-all text-xs text-accent hover:underline"
                   >
                     <Mail className="h-3 w-3 shrink-0" aria-hidden />
                     {primaryContact.email}
@@ -312,11 +312,11 @@ function ClientSidebar({
               </div>
             </div>
           ) : (
-            <p className="text-xs text-slate-400">No contact on file.</p>
+            <p className="text-xs text-ink/65">No contact on file.</p>
           )}
         </div>
 
-        <div className="mt-4 space-y-2 border-t border-slate-100 pt-4">
+        <div className="mt-4 space-y-2 border-t border-separator/50 pt-4">
           <Button className="w-full" onClick={() => onOpenPanel("interaction")}>
             Log Interaction
           </Button>
@@ -365,7 +365,7 @@ function ClientSidebar({
             </div>
 
             {pendingTier === "WEBSITE_LIVE" && !client.websiteLaunchDate && (
-              <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
+              <p className="rounded-lg bg-warning/10 px-3 py-2 text-xs text-warning">
                 Today will be recorded as the website launch date, starting the upsell countdown.
               </p>
             )}
@@ -440,30 +440,30 @@ function OverviewTab({ client }: { client: ClientDetailType }) {
       {client.contacts.length > 0 && (
         <Card className="p-5">
           <SectionHeading title="Contacts" />
-          <ul className="divide-y divide-slate-100">
+          <ul className="divide-y divide-separator/50">
             {client.contacts.map((contact) => (
               <li key={contact.id} className="flex items-start justify-between gap-3 py-2.5">
                 <div className="min-w-0">
-                  <p className="text-sm font-medium text-slate-900">
+                  <p className="text-sm font-medium text-ink">
                     {contact.firstName} {contact.lastName}
                     {contact.isPrimary && (
-                      <span className="ml-2 rounded-full bg-brand-100 px-2 py-0.5 text-xs font-medium text-brand-700">
+                      <span className="ml-2 rounded-full bg-brand-100 px-2 py-0.5 text-xs font-medium text-accent">
                         Primary
                       </span>
                     )}
                   </p>
-                  {contact.title && <p className="text-xs text-slate-500">{contact.title}</p>}
+                  {contact.title && <p className="text-xs text-ink/70">{contact.title}</p>}
                 </div>
                 <div className="shrink-0 text-right text-xs">
                   {contact.phone && (
-                    <a href={`tel:${contact.phone}`} className="block text-brand-700 hover:underline">
+                    <a href={`tel:${contact.phone}`} className="block text-accent hover:underline">
                       {contact.phone}
                     </a>
                   )}
                   {contact.email && (
                     <a
                       href={`mailto:${contact.email}`}
-                      className="block break-all text-brand-700 hover:underline"
+                      className="block break-all text-accent hover:underline"
                     >
                       {contact.email}
                     </a>
@@ -481,8 +481,8 @@ function OverviewTab({ client }: { client: ClientDetailType }) {
 function Detail({ label, value }: { label: string; value: string | null | undefined }) {
   return (
     <div>
-      <dt className="text-xs text-slate-500">{label}</dt>
-      <dd className="mt-0.5 break-words text-slate-800">{value || "—"}</dd>
+      <dt className="text-xs text-ink/70">{label}</dt>
+      <dd className="mt-0.5 break-words text-ink">{value || "—"}</dd>
     </div>
   );
 }
@@ -508,12 +508,12 @@ function TasksTab({ client, onAdd }: { client: ClientDetailType; onAdd: () => vo
         title="Tasks"
         action={
           <div className="flex items-center gap-2">
-            <label className="flex items-center gap-1.5 text-xs text-slate-500">
+            <label className="flex items-center gap-1.5 text-xs text-ink/70">
               <input
                 type="checkbox"
                 checked={showCompleted}
                 onChange={(e) => setShowCompleted(e.target.checked)}
-                className="h-3.5 w-3.5 rounded border-slate-300 text-brand-700"
+                className="h-3.5 w-3.5 rounded border-separator text-accent"
               />
               Show closed
             </label>
@@ -575,10 +575,10 @@ function InteractionsTab({ client, onAdd }: { client: ClientDetailType; onAdd: (
 }
 
 const RETAINER_STATUS_STYLES: Record<RetainerStatus, string> = {
-  ACTIVE: "bg-emerald-100 text-emerald-700",
-  PAUSED: "bg-amber-100 text-amber-800",
-  CANCELLED: "bg-red-100 text-red-700",
-  PENDING_FIRST_PAYMENT: "bg-slate-100 text-slate-600",
+  ACTIVE: "bg-success/15 text-success",
+  PAUSED: "bg-warning/15 text-warning",
+  CANCELLED: "bg-danger/15 text-danger",
+  PENDING_FIRST_PAYMENT: "bg-fill/15 text-ink/70",
 };
 
 const RETAINER_STATUS_LABELS: Record<RetainerStatus, string> = {
@@ -615,7 +615,7 @@ function RetainersTab({ client, onAdd }: { client: ClientDetailType; onAdd: () =
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
-            <thead className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
+            <thead className="border-b border-separator/70 text-xs uppercase tracking-wide text-ink/70">
               <tr>
                 <th scope="col" className="py-2 pr-3 font-medium">Tier</th>
                 <th scope="col" className="py-2 pr-3 text-right font-medium">Monthly</th>
@@ -625,13 +625,13 @@ function RetainersTab({ client, onAdd }: { client: ClientDetailType; onAdd: () =
                 <th scope="col" className="py-2 font-medium"><span className="sr-only">Actions</span></th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-separator/50">
               {client.retainers.map((retainer) => (
                 <tr key={retainer.id}>
                   <td className="py-2.5 pr-3">
                     <TierBadge tier={retainer.tier} />
                   </td>
-                  <td className="py-2.5 pr-3 text-right font-medium tabular-nums text-slate-900">
+                  <td className="py-2.5 pr-3 text-right font-medium tabular-nums text-ink">
                     {formatCurrency(retainer.monthlyAmount)}
                   </td>
                   <td className="py-2.5 pr-3">
@@ -656,13 +656,13 @@ function RetainersTab({ client, onAdd }: { client: ClientDetailType; onAdd: () =
                       ))}
                     </select>
                   </td>
-                  <td className="py-2.5 pr-3 text-slate-600">{formatDate(retainer.startDate)}</td>
-                  <td className="py-2.5 pr-3 text-slate-600">{formatDate(retainer.endDate)}</td>
+                  <td className="py-2.5 pr-3 text-ink/70">{formatDate(retainer.startDate)}</td>
+                  <td className="py-2.5 pr-3 text-ink/70">{formatDate(retainer.endDate)}</td>
                   <td className="py-2.5 text-right">
                     <button
                       type="button"
                       onClick={() => setConfirmDelete(retainer.id)}
-                      className="rounded p-1 text-slate-300 hover:bg-red-50 hover:text-red-600"
+                      className="rounded p-1 text-ink/55 hover:bg-danger/10 hover:text-danger"
                       aria-label="Delete retainer"
                     >
                       <Trash2 className="h-4 w-4" />
@@ -721,7 +721,7 @@ function DocumentsTab({ client }: { client: ClientDetailType }) {
       <SectionHeading title="Documents" description="Contracts, invoices, brand assets." />
 
       {!storageEnabled ? (
-        <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+        <div className="rounded-lg border border-separator/70 bg-fill/8 p-4 text-sm text-ink/70">
           File storage isn't configured on this server yet. Set <code>S3_BUCKET</code>,{" "}
           <code>S3_ACCESS_KEY</code> and <code>S3_SECRET_KEY</code> to enable uploads.
         </div>
@@ -742,7 +742,7 @@ function DocumentsTab({ client }: { client: ClientDetailType }) {
             </select>
           </Field>
 
-          <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg bg-brand-700 px-3.5 py-2 text-sm font-medium text-white hover:bg-brand-800">
+          <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg bg-accent px-3.5 py-2 text-sm font-medium text-white hover:bg-brand-800">
             <Upload className="h-4 w-4" aria-hidden />
             {uploadDocument.isPending ? "Uploading…" : "Upload file"}
             <input
@@ -758,7 +758,7 @@ function DocumentsTab({ client }: { client: ClientDetailType }) {
         </div>
       )}
 
-      {error && <p className="mb-3 text-sm text-red-600">{error}</p>}
+      {error && <p className="mb-3 text-sm text-danger">{error}</p>}
 
       {client.documents.length === 0 ? (
         <EmptyState
@@ -767,14 +767,14 @@ function DocumentsTab({ client }: { client: ClientDetailType }) {
           description="Signed contracts and invoices live here so they're not buried in email."
         />
       ) : (
-        <ul className="divide-y divide-slate-100">
+        <ul className="divide-y divide-separator/50">
           {client.documents.map((doc) => (
             <li key={doc.id} className="flex items-center justify-between gap-3 py-2.5">
               <div className="flex min-w-0 items-center gap-2.5">
-                <FileText className="h-4 w-4 shrink-0 text-slate-400" aria-hidden />
+                <FileText className="h-4 w-4 shrink-0 text-ink/65" aria-hidden />
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-medium text-slate-900">{doc.fileName}</p>
-                  <p className="text-xs text-slate-500">
+                  <p className="truncate text-sm font-medium text-ink">{doc.fileName}</p>
+                  <p className="text-xs text-ink/70">
                     {doc.category ? `${doc.category} · ` : ""}
                     {formatDate(doc.uploadedAt)}
                   </p>
@@ -788,7 +788,7 @@ function DocumentsTab({ client }: { client: ClientDetailType }) {
                 <button
                   type="button"
                   onClick={() => deleteDocument.mutate(doc.id)}
-                  className="rounded p-1 text-slate-300 hover:bg-red-50 hover:text-red-600"
+                  className="rounded p-1 text-ink/55 hover:bg-danger/10 hover:text-danger"
                   aria-label={`Delete ${doc.fileName}`}
                 >
                   <Trash2 className="h-4 w-4" />
@@ -821,11 +821,11 @@ function HistoryTab({ client }: { client: ClientDetailType }) {
           {client.serviceHistory.map((entry, index) => (
             <li key={entry.id} className="relative flex gap-3 pb-4 last:pb-0">
               {index !== client.serviceHistory.length - 1 && (
-                <span className="absolute left-[7px] top-4 h-full w-px bg-slate-200" aria-hidden />
+                <span className="absolute left-[7px] top-4 h-full w-px bg-fill/25" aria-hidden />
               )}
-              <span className="relative z-10 mt-1.5 h-3.5 w-3.5 shrink-0 rounded-full border-2 border-brand-500 bg-white" />
+              <span className="relative z-10 mt-1.5 h-3.5 w-3.5 shrink-0 rounded-full border-2 border-brand-500 bg-content" />
               <div className="min-w-0 flex-1">
-                <p className="text-sm text-slate-900">
+                <p className="text-sm text-ink">
                   {entry.fromTier ? (
                     <>
                       Moved from <strong>{TIER_LABELS[entry.fromTier]}</strong> to{" "}
@@ -837,11 +837,11 @@ function HistoryTab({ client }: { client: ClientDetailType }) {
                     </>
                   )}
                 </p>
-                <p className="text-xs text-slate-500">
+                <p className="text-xs text-ink/70">
                   {formatDate(entry.changedAt)}
                   {entry.changedBy && ` · ${entry.changedBy.name}`}
                 </p>
-                {entry.note && <p className="mt-1 text-xs italic text-slate-500">{entry.note}</p>}
+                {entry.note && <p className="mt-1 text-xs italic text-ink/70">{entry.note}</p>}
               </div>
             </li>
           ))}
@@ -952,7 +952,7 @@ function LogInteractionPanel({
           />
         </Field>
 
-        {error && <p className="text-sm text-red-600">{error}</p>}
+        {error && <p className="text-sm text-danger">{error}</p>}
       </form>
     </SlideOverPanel>
   );
@@ -1057,7 +1057,7 @@ function AddTaskPanel({
           />
         </Field>
 
-        {error && <p className="text-sm text-red-600">{error}</p>}
+        {error && <p className="text-sm text-danger">{error}</p>}
       </form>
     </SlideOverPanel>
   );
@@ -1222,7 +1222,7 @@ function AddRetainerPanel({
           />
         </Field>
 
-        {error && <p className="text-sm text-red-600">{error}</p>}
+        {error && <p className="text-sm text-danger">{error}</p>}
       </form>
     </SlideOverPanel>
   );
@@ -1347,17 +1347,17 @@ function AddContactPanel({
           />
         </Field>
 
-        <label className="flex items-center gap-2 text-sm text-slate-700">
+        <label className="flex items-center gap-2 text-sm text-ink/80">
           <input
             type="checkbox"
             checked={isPrimary}
             onChange={(e) => setIsPrimary(e.target.checked)}
-            className="h-4 w-4 rounded border-slate-300 text-brand-700"
+            className="h-4 w-4 rounded border-separator text-accent"
           />
           Primary contact
         </label>
 
-        {error && <p className="text-sm text-red-600">{error}</p>}
+        {error && <p className="text-sm text-danger">{error}</p>}
       </form>
     </SlideOverPanel>
   );

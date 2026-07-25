@@ -32,7 +32,7 @@ const AutomationSettings = lazy(() =>
 function RouteFallback() {
   return (
     <div className="flex min-h-[60vh] items-center justify-center">
-      <div className="h-6 w-6 animate-spin rounded-full border-2 border-slate-200 border-t-brand-700" />
+      <div className="h-6 w-6 animate-spin rounded-full border-2 border-separator/70 border-t-accent" />
     </div>
   );
 }
@@ -43,7 +43,7 @@ function RequireAuth() {
   if (isLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <div className="h-6 w-6 animate-spin rounded-full border-2 border-slate-200 border-t-brand-700" />
+        <div className="h-6 w-6 animate-spin rounded-full border-2 border-separator/70 border-t-accent" />
       </div>
     );
   }
@@ -102,8 +102,8 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | 
       return (
         <div className="flex min-h-screen items-center justify-center px-4">
           <div className="card max-w-md p-6 text-center">
-            <h1 className="text-base font-semibold text-slate-900">Something broke</h1>
-            <p className="mt-1 text-sm text-slate-600">{this.state.error.message}</p>
+            <h1 className="text-base font-semibold text-ink">Something broke</h1>
+            <p className="mt-1 text-sm text-ink/70">{this.state.error.message}</p>
             <Button className="mt-4" onClick={() => window.location.reload()}>
               Reload the app
             </Button>

@@ -5,18 +5,27 @@ import type { ButtonHTMLAttributes, ReactNode } from "react";
 type ButtonVariant = "primary" | "secondary" | "ghost" | "danger" | "warning";
 type ButtonSize = "sm" | "md";
 
+/*
+ * macOS push buttons. `primary` is the *default* button — the accent-filled one
+ * Return activates — and `secondary` is the standard bezel: a light surface with
+ * a hairline, not an outline. Both carry a 1px highlight shadow, which is what
+ * stops a flat rectangle from reading as web-flat.
+ */
 const VARIANTS: Record<ButtonVariant, string> = {
-  primary: "bg-brand-700 text-white hover:bg-brand-800 disabled:bg-brand-700/50",
+  primary:
+    "bg-accent text-accent-ink shadow-[0_1px_1px_rgb(0_0_0/0.10)] hover:bg-accent-hover disabled:bg-accent/40",
   secondary:
-    "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 disabled:text-slate-400",
-  ghost: "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
-  danger: "bg-red-600 text-white hover:bg-red-700 disabled:bg-red-600/50",
-  warning: "bg-amber-600 text-white hover:bg-amber-700 disabled:bg-amber-600/50",
+    "border border-separator bg-content text-ink shadow-[0_1px_1px_rgb(0_0_0/0.04)] hover:bg-fill/10 disabled:text-ink/65",
+  ghost: "text-ink/70 hover:bg-fill/12 hover:text-ink",
+  danger: "bg-danger text-status-ink shadow-[0_1px_1px_rgb(0_0_0/0.10)] hover:opacity-90 disabled:bg-danger/40",
+  warning:
+    "bg-warning text-status-ink shadow-[0_1px_1px_rgb(0_0_0/0.10)] hover:opacity-90 disabled:bg-warning/40",
 };
 
+// 44px on touch, macOS's tighter 28/32px once there's a pointer.
 const SIZES: Record<ButtonSize, string> = {
-  sm: "px-2.5 py-1.5 text-xs",
-  md: "px-3.5 py-2 text-sm",
+  sm: "min-h-11 px-2.5 text-xs lg:min-h-7",
+  md: "min-h-11 px-3.5 text-sm lg:min-h-8",
 };
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -37,7 +46,7 @@ export function Button({
   return (
     <button
       className={clsx(
-        "inline-flex items-center justify-center gap-1.5 rounded-lg font-medium transition-colors",
+        "inline-flex select-none items-center justify-center gap-1.5 rounded-control font-medium transition-colors",
         "disabled:cursor-not-allowed",
         VARIANTS[variant],
         SIZES[size],
@@ -73,8 +82,8 @@ export function Field({
         {label}
       </label>
       {children}
-      {hint && !error && <p className="mt-1 text-xs text-slate-400">{hint}</p>}
-      {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
+      {hint && !error && <p className="mt-1 text-xs text-ink/65">{hint}</p>}
+      {error && <p className="mt-1 text-xs text-danger">{error}</p>}
     </div>
   );
 }
@@ -95,8 +104,8 @@ export function SectionHeading({
   return (
     <div className="mb-3 flex items-start justify-between gap-3">
       <div>
-        <h2 className="text-sm font-semibold text-slate-900">{title}</h2>
-        {description && <p className="text-xs text-slate-500">{description}</p>}
+        <h2 className="text-sm font-semibold text-ink">{title}</h2>
+        {description && <p className="text-xs text-ink/70">{description}</p>}
       </div>
       {action}
     </div>
@@ -115,24 +124,24 @@ export function EmptyState({
   action?: ReactNode;
 }) {
   return (
-    <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-slate-300 px-6 py-10 text-center">
-      {icon && <div className="mb-2 text-slate-300">{icon}</div>}
-      <p className="text-sm font-medium text-slate-700">{title}</p>
-      {description && <p className="mt-1 max-w-sm text-xs text-slate-500">{description}</p>}
+    <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-separator px-6 py-10 text-center">
+      {icon && <div className="mb-2 text-ink/55">{icon}</div>}
+      <p className="text-sm font-medium text-ink/80">{title}</p>
+      {description && <p className="mt-1 max-w-sm text-xs text-ink/70">{description}</p>}
       {action && <div className="mt-4">{action}</div>}
     </div>
   );
 }
 
 export function Skeleton({ className }: { className?: string }) {
-  return <div className={clsx("animate-pulse rounded bg-slate-200", className)} />;
+  return <div className={clsx("animate-pulse rounded bg-fill/25", className)} />;
 }
 
 export function ErrorNotice({ message, onRetry }: { message: string; onRetry?: () => void }) {
   return (
-    <div className="rounded-lg border border-red-200 bg-red-50 p-4">
-      <p className="text-sm font-medium text-red-800">Something went wrong</p>
-      <p className="mt-1 text-xs text-red-700">{message}</p>
+    <div className="rounded-lg border border-danger/30 bg-danger/10 p-4">
+      <p className="text-sm font-medium text-danger">Something went wrong</p>
+      <p className="mt-1 text-xs text-danger">{message}</p>
       {onRetry && (
         <Button variant="secondary" size="sm" className="mt-3" onClick={onRetry}>
           Try again
@@ -156,7 +165,9 @@ export function Avatar({
     <span
       className={clsx(
         "inline-flex shrink-0 items-center justify-center rounded-full text-xs font-semibold",
-        tone === "brand" ? "bg-brand-100 text-brand-700" : "bg-slate-200 text-slate-600",
+        // Solid accent rather than a 15% tint: accent-on-tint measured 3.5:1 in
+        // the dark appearance, and macOS draws initial chips filled anyway.
+        tone === "brand" ? "bg-accent text-accent-ink" : "bg-fill/25 text-ink/70",
         className ?? "h-8 w-8"
       )}
       aria-hidden

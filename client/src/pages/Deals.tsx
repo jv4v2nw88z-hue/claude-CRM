@@ -101,8 +101,8 @@ export function Deals() {
     <div className="space-y-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-xl font-semibold text-slate-900">Deals</h1>
-          <p className="text-sm text-slate-500">
+          <h1 className="text-xl font-semibold text-ink">Deals</h1>
+          <p className="text-sm text-ink/70">
             {formatCurrency(pipelineValue)} in open pipeline
           </p>
         </div>
@@ -256,7 +256,7 @@ function DealPanel({
               <button
                 type="button"
                 onClick={() => setConfirmDelete(true)}
-                className="inline-flex items-center gap-1 rounded p-1.5 text-xs text-slate-400 hover:bg-red-50 hover:text-red-600"
+                className="inline-flex items-center gap-1 rounded p-1.5 text-xs text-ink/65 hover:bg-danger/10 hover:text-danger"
               >
                 <Trash2 className="h-3.5 w-3.5" aria-hidden />
                 Delete
@@ -381,11 +381,11 @@ function DealPanel({
             />
           </Field>
 
-          {error && <p className="text-sm text-red-600">{error}</p>}
+          {error && <p className="text-sm text-danger">{error}</p>}
 
           {isEdit && deal && !deal.clientId && (
-            <div className="rounded-lg border border-brand-200 bg-brand-50 p-3">
-              <p className="text-xs text-brand-900">
+            <div className="rounded-lg border border-accent/30 bg-accent/10 p-3">
+              <p className="text-xs text-accent">
                 Won this one? Convert it into a client record and start the ladder.
               </p>
               <Button
@@ -401,11 +401,11 @@ function DealPanel({
           )}
 
           {isEdit && deal?.clientId && (
-            <p className="text-xs text-slate-500">
+            <p className="text-xs text-ink/70">
               Already converted —{" "}
               <button
                 type="button"
-                className="font-medium text-brand-700 hover:underline"
+                className="font-medium text-accent hover:underline"
                 onClick={() => navigate(`/clients/${deal.clientId}`)}
               >
                 open the client record

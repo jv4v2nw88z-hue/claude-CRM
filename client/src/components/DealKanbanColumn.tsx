@@ -26,18 +26,18 @@ export function DealKanbanColumn({ stage, deals, onOpenDeal }: DealKanbanColumnP
     <div
       ref={setNodeRef}
       className={clsx(
-        "flex min-h-[16rem] w-72 shrink-0 flex-col rounded-xl border border-t-4 bg-slate-100/60 p-3 transition-colors",
+        "flex min-h-[16rem] w-72 shrink-0 flex-col rounded-xl border border-t-4 bg-fill/15/60 p-3 transition-colors",
         STAGE_ACCENTS[stage],
-        isOver ? "border-brand-400 bg-brand-50" : "border-slate-200"
+        isOver ? "border-brand-400 bg-accent/10" : "border-separator/70"
       )}
     >
       <div className="mb-3 flex items-baseline justify-between">
-        <h3 className="text-sm font-semibold text-slate-700">
+        <h3 className="text-sm font-semibold text-ink/80">
           {stage}
-          <span className="ml-1.5 text-xs font-normal text-slate-400">{deals.length}</span>
+          <span className="ml-1.5 text-xs font-normal text-ink/65">{deals.length}</span>
         </h3>
         {total > 0 && (
-          <span className="text-xs tabular-nums text-slate-500">{formatCurrency(total)}</span>
+          <span className="text-xs tabular-nums text-ink/70">{formatCurrency(total)}</span>
         )}
       </div>
 
@@ -47,7 +47,7 @@ export function DealKanbanColumn({ stage, deals, onOpenDeal }: DealKanbanColumnP
         ))}
 
         {deals.length === 0 && (
-          <p className="rounded-lg border border-dashed border-slate-300 px-3 py-6 text-center text-xs text-slate-400">
+          <p className="rounded-lg border border-dashed border-separator px-3 py-6 text-center text-xs text-ink/65">
             Drop a deal here
           </p>
         )}

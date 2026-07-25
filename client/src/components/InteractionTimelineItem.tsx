@@ -12,13 +12,14 @@ const ICONS: Record<InteractionType, typeof Phone> = {
   OTHER: MoreHorizontal,
 };
 
+/* Hue-coded like the tier badges, so each keeps an explicit dark pair. */
 const ICON_STYLES: Record<InteractionType, string> = {
-  CALL: "bg-blue-100 text-blue-600",
-  EMAIL: "bg-purple-100 text-purple-600",
-  MEETING: "bg-emerald-100 text-emerald-600",
-  TEXT: "bg-teal-100 text-teal-600",
-  SITE_VISIT: "bg-amber-100 text-amber-600",
-  OTHER: "bg-slate-100 text-slate-600",
+  CALL: "bg-blue-100 text-blue-600 dark:bg-blue-400/20 dark:text-blue-200",
+  EMAIL: "bg-purple-100 text-purple-600 dark:bg-purple-400/20 dark:text-purple-200",
+  MEETING: "bg-success/15 text-success",
+  TEXT: "bg-teal-100 text-teal-600 dark:bg-teal-400/20 dark:text-teal-200",
+  SITE_VISIT: "bg-warning/15 text-warning",
+  OTHER: "bg-fill/15 text-ink/70",
 };
 
 interface InteractionTimelineItemProps {
@@ -44,7 +45,7 @@ export function InteractionTimelineItem({
 
   return (
     <li className="relative flex gap-3 pb-4 last:pb-0">
-      {!isLast && <span className="absolute left-[15px] top-8 h-full w-px bg-slate-200" aria-hidden />}
+      {!isLast && <span className="absolute left-[15px] top-8 h-full w-px bg-fill/25" aria-hidden />}
 
       <span
         className={`relative z-10 flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${ICON_STYLES[type]}`}
@@ -53,20 +54,20 @@ export function InteractionTimelineItem({
       </span>
 
       <div className="min-w-0 flex-1 pt-0.5">
-        <div className="flex flex-wrap items-baseline gap-x-2 text-xs text-slate-500">
-          <span className="font-medium text-slate-700">{INTERACTION_LABELS[type]}</span>
+        <div className="flex flex-wrap items-baseline gap-x-2 text-xs text-ink/70">
+          <span className="font-medium text-ink/80">{INTERACTION_LABELS[type]}</span>
           <span>{formatDate(occurredAt)}</span>
           {loggedBy && <span>· {loggedBy}</span>}
           {clientName && clientId && (
             <Link
               to={`/clients/${clientId}`}
-              className="rounded-full bg-slate-100 px-2 py-0.5 font-medium text-slate-600 hover:bg-slate-200"
+              className="rounded-full bg-fill/15 px-2 py-0.5 font-medium text-ink/70 hover:bg-fill/25"
             >
               {clientName}
             </Link>
           )}
         </div>
-        <p className="mt-1 whitespace-pre-wrap text-sm text-slate-800">{summary}</p>
+        <p className="mt-1 whitespace-pre-wrap text-sm text-ink">{summary}</p>
       </div>
     </li>
   );

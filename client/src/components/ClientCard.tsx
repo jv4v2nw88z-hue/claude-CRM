@@ -10,15 +10,15 @@ export function ClientCard({ client }: { client: ClientListItem }) {
   return (
     <Link
       to={`/clients/${client.id}`}
-      className="block rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition-colors hover:border-brand-300"
+      className="block rounded-xl border border-separator/70 bg-content p-4 shadow-sm transition-colors hover:border-brand-300"
     >
       <div className="flex items-start gap-3">
         <Avatar label={initials(client.businessName)} className="h-9 w-9" />
 
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-2">
-            <p className="truncate font-medium text-slate-900">{client.businessName}</p>
-            <span className="shrink-0 font-semibold tabular-nums text-emerald-600">
+            <p className="truncate font-medium text-ink">{client.businessName}</p>
+            <span className="shrink-0 font-semibold tabular-nums text-success">
               {client.mrr > 0 ? formatCurrency(client.mrr) : "—"}
             </span>
           </div>
@@ -26,14 +26,14 @@ export function ClientCard({ client }: { client: ClientListItem }) {
           <div className="mt-1.5 flex flex-wrap items-center gap-2">
             <TierBadge tier={client.currentTier} />
             {client.isAtRisk && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
+              <span className="inline-flex items-center gap-1 rounded-full bg-warning/15 px-2 py-0.5 text-xs font-medium text-warning">
                 <AlertTriangle className="h-3 w-3" aria-hidden />
                 {client.daysSinceLaunch}d, no retainer
               </span>
             )}
           </div>
 
-          <dl className="mt-2 space-y-0.5 text-xs text-slate-500">
+          <dl className="mt-2 space-y-0.5 text-xs text-ink/70">
             <div className="flex justify-between gap-2">
               <dt>Last contact</dt>
               <dd>{client.lastInteractionAt ? formatRelative(client.lastInteractionAt) : "Never"}</dd>
@@ -41,7 +41,7 @@ export function ClientCard({ client }: { client: ClientListItem }) {
             {client.nextTask && (
               <div className="flex justify-between gap-2">
                 <dt>Next up</dt>
-                <dd className="truncate text-right text-slate-600">{client.nextTask.title}</dd>
+                <dd className="truncate text-right text-ink/70">{client.nextTask.title}</dd>
               </div>
             )}
           </dl>

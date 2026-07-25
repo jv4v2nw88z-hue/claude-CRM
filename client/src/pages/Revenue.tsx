@@ -13,6 +13,7 @@ import { useRevenueSummary } from "../hooks/queries";
 import type { RetainerStatus, ServiceTierType } from "../types";
 import { formatCurrency, formatDate, TIER_LABELS } from "../lib/format";
 import { MRRTrendChart } from "../components/MRRTrendChart";
+import { useChartTheme } from "../lib/chartTheme";
 import { StatCard } from "../components/StatCard";
 import { TierBadge } from "../components/TierBadge";
 import { Card, EmptyState, ErrorNotice, SectionHeading, Skeleton } from "../components/ui";
@@ -28,10 +29,10 @@ const TIER_CHART_COLORS: Partial<Record<ServiceTierType, string>> = {
 };
 
 const STATUS_STYLES: Record<RetainerStatus, string> = {
-  ACTIVE: "bg-emerald-100 text-emerald-700",
-  PAUSED: "bg-amber-100 text-amber-800",
-  CANCELLED: "bg-red-100 text-red-700",
-  PENDING_FIRST_PAYMENT: "bg-slate-100 text-slate-600",
+  ACTIVE: "bg-success/15 text-success",
+  PAUSED: "bg-warning/15 text-warning",
+  CANCELLED: "bg-danger/15 text-danger",
+  PENDING_FIRST_PAYMENT: "bg-fill/15 text-ink/70",
 };
 
 const STATUS_LABELS: Record<RetainerStatus, string> = {
@@ -42,6 +43,7 @@ const STATUS_LABELS: Record<RetainerStatus, string> = {
 };
 
 export function Revenue() {
+  const theme = useChartTheme();
   const revenueQuery = useRevenueSummary();
   const data = revenueQuery.data;
 
@@ -54,8 +56,8 @@ export function Revenue() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-xl font-semibold text-slate-900">Revenue</h1>
-        <p className="text-sm text-slate-500">
+        <h1 className="text-xl font-semibold text-ink">Revenue</h1>
+        <p className="text-sm text-ink/70">
           Every retainer across the book, and whether the ladder is working.
         </p>
       </div>
@@ -119,27 +121,29 @@ export function Revenue() {
           ) : (
             <ResponsiveContainer width="100%" height={280}>
               <BarChart data={tierChartData} margin={{ top: 8, right: 8, bottom: 0, left: -8 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" vertical={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke={theme.grid} vertical={false} />
                 <XAxis
                   dataKey="tier"
-                  tick={{ fontSize: 11, fill: "#64748B" }}
+                  tick={{ fontSize: 11, fill: theme.axis }}
                   axisLine={false}
                   tickLine={false}
                   interval={0}
                 />
                 <YAxis
                   tickFormatter={(value: number) => `$${value >= 1000 ? `${value / 1000}k` : value}`}
-                  tick={{ fontSize: 12, fill: "#64748B" }}
+                  tick={{ fontSize: 12, fill: theme.axis }}
                   axisLine={false}
                   tickLine={false}
                   width={48}
                 />
                 <Tooltip
                   formatter={(value: number) => [formatCurrency(value), "MRR"]}
-                  cursor={{ fill: "#F1F5F9" }}
+                  cursor={{ fill: theme.cursor }}
                   contentStyle={{
                     borderRadius: 8,
-                    border: "1px solid #E2E8F0",
+                    border: `1px solid ${theme.tooltipBorder}`,
+                    background: theme.tooltipBg,
+                    color: theme.tooltipInk,
                     fontSize: 12,
                   }}
                 />
@@ -171,7 +175,7 @@ export function Revenue() {
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
-              <thead className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
+              <thead className="border-b border-separator/70 text-xs uppercase tracking-wide text-ink/70">
                 <tr>
                   <th scope="col" className="py-2 pr-3 font-medium">Client</th>
                   <th scope="col" className="py-2 pr-3 font-medium">Tier</th>
@@ -181,25 +185,25 @@ export function Revenue() {
                   <th scope="col" className="py-2 font-medium">End</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody className="divide-y divide-separator/50">
                 {data?.retainers.map((retainer) => (
-                  <tr key={retainer.id} className="hover:bg-slate-50">
+                  <tr key={retainer.id} className="hover:bg-fill/8">
                     <td className="py-2.5 pr-3">
                       {retainer.client ? (
                         <Link
                           to={`/clients/${retainer.client.id}`}
-                          className="font-medium text-slate-900 hover:text-brand-700 hover:underline"
+                          className="font-medium text-ink hover:text-accent hover:underline"
                         >
                           {retainer.client.businessName}
                         </Link>
                       ) : (
-                        <span className="text-slate-400">—</span>
+                        <span className="text-ink/65">—</span>
                       )}
                     </td>
                     <td className="py-2.5 pr-3">
                       <TierBadge tier={retainer.tier} />
                     </td>
-                    <td className="py-2.5 pr-3 text-right font-medium tabular-nums text-slate-900">
+                    <td className="py-2.5 pr-3 text-right font-medium tabular-nums text-ink">
                       {formatCurrency(retainer.monthlyAmount)}
                     </td>
                     <td className="py-2.5 pr-3">
@@ -209,8 +213,8 @@ export function Revenue() {
                         {STATUS_LABELS[retainer.status]}
                       </span>
                     </td>
-                    <td className="py-2.5 pr-3 text-slate-600">{formatDate(retainer.startDate)}</td>
-                    <td className="py-2.5 text-slate-600">{formatDate(retainer.endDate)}</td>
+                    <td className="py-2.5 pr-3 text-ink/70">{formatDate(retainer.startDate)}</td>
+                    <td className="py-2.5 text-ink/70">{formatDate(retainer.endDate)}</td>
                   </tr>
                 ))}
               </tbody>

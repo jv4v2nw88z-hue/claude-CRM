@@ -9,6 +9,7 @@ import {
 } from "recharts";
 import type { MrrTrendPoint } from "../types";
 import { formatCurrency, monthLabel } from "../lib/format";
+import { useChartTheme } from "../lib/chartTheme";
 import { EmptyState } from "./ui";
 
 export function MRRTrendChart({
@@ -18,6 +19,7 @@ export function MRRTrendChart({
   data: MrrTrendPoint[] | undefined;
   height?: number;
 }) {
+  const theme = useChartTheme();
   const points = data ?? [];
 
   if (points.length === 0 || points.every((p) => p.mrr === 0)) {
@@ -32,17 +34,17 @@ export function MRRTrendChart({
   return (
     <ResponsiveContainer width="100%" height={height}>
       <LineChart data={points} margin={{ top: 8, right: 8, bottom: 0, left: -8 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" vertical={false} />
+        <CartesianGrid strokeDasharray="3 3" stroke={theme.grid} vertical={false} />
         <XAxis
           dataKey="month"
           tickFormatter={monthLabel}
-          tick={{ fontSize: 12, fill: "#64748B" }}
+          tick={{ fontSize: 12, fill: theme.axis }}
           axisLine={false}
           tickLine={false}
         />
         <YAxis
           tickFormatter={(value: number) => `$${value >= 1000 ? `${value / 1000}k` : value}`}
-          tick={{ fontSize: 12, fill: "#64748B" }}
+          tick={{ fontSize: 12, fill: theme.axis }}
           axisLine={false}
           tickLine={false}
           width={48}
@@ -52,17 +54,21 @@ export function MRRTrendChart({
           labelFormatter={(label: string) => monthLabel(label)}
           contentStyle={{
             borderRadius: 8,
-            border: "1px solid #E2E8F0",
+            border: `1px solid ${theme.tooltipBorder}`,
+            background: theme.tooltipBg,
+            color: theme.tooltipInk,
             fontSize: 12,
-            boxShadow: "0 1px 2px rgba(15,23,42,0.06)",
+            boxShadow: "0 8px 24px rgb(0 0 0 / 0.18)",
           }}
+          itemStyle={{ color: theme.tooltipInk }}
+          labelStyle={{ color: theme.tooltipInk }}
         />
         <Line
           type="monotone"
           dataKey="mrr"
-          stroke="#059669"
+          stroke={theme.line}
           strokeWidth={2.5}
-          dot={{ r: 3, fill: "#059669" }}
+          dot={{ r: 3, fill: theme.line }}
           activeDot={{ r: 5 }}
         />
       </LineChart>

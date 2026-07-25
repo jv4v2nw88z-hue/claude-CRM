@@ -236,6 +236,34 @@ The spec's `AutomationRule` model covers the four tier-based rules but can't exp
 
 ---
 
+### Appearance
+
+The UI follows macOS conventions: the system font stack (SF on Apple hardware),
+a translucent vibrancy sidebar over a window background, 6px controls and 10px
+grouped boxes, accent-filled sidebar selection, and recessed segmented controls.
+The accent is the brand indigo, not Apple's system blue.
+
+**Light and dark follow the OS, with no in-app toggle** — a macOS app takes the
+system appearance. That is built on semantic colour tokens (`bg-content`,
+`text-ink`, `border-separator`) which resolve to CSS variables redefined under
+`prefers-color-scheme: dark`. The alternative, a `dark:` variant on every
+coloured utility, would have doubled ~430 call sites and made every future page a
+chance to forget one. Tokens hold RGB channels so `text-ink/70` still works,
+because macOS builds text hierarchy by fading one ink colour.
+
+Two things are deliberately *not* token-driven. Tier and interaction badges stay
+hue-coded — the ladder is read by colour, and six shades of one accent would not
+be — so each carries an explicit dark pair. And recharts takes concrete colour
+strings for axes and tooltips rather than CSS variables, so `lib/chartTheme.ts`
+reads the tokens and re-reads them on appearance change.
+
+**Where this departs from Apple:** macOS uses roughly 60% and 35% ink opacity for
+secondary and tertiary text, which fails WCAG AA at body sizes. Measured against
+rendered backgrounds, those values produced 187 sub-AA text instances across the
+two appearances. The floors are raised to 65–70%, which compresses the hierarchy
+slightly and takes both appearances to **zero AA failures**. For a tool someone
+reads all day, legibility beats fidelity.
+
 ### Desktop and mobile
 
 The primary target is a laptop browser, but Cole updates records from his phone
