@@ -15,8 +15,12 @@
     "migrate:remote": "npm run migrate:remote --prefix server",
     "seed:local": "npm run seed:local --prefix server",
     "seed:remote": "npm run seed:remote --prefix server",
-    "deploy": "npm run build --prefix client && npm run deploy --prefix server",
+    "deploy": "wrangler deploy",
     "cf:build": "npm run ensure:deps && npm run build --prefix client && npm run codegen --prefix server",
-    "qa:lifecycle": "npm run qa:lifecycle --prefix server"
+    "qa:lifecycle": "npm run qa:lifecycle --prefix server",
+    "preview": "wrangler dev"
+  },
+  "devDependencies": {
+    "wrangler": "^4.114.0"
   }
 }
