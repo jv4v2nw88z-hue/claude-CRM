@@ -19,7 +19,8 @@ const remote = process.argv.includes("--remote");
 
 /** Local secrets live in .dev.vars, which is not a JS module — parse it directly. */
 function readDevVar(key: string): string | undefined {
-  const file = path.resolve(".dev.vars");
+  // The config lives at the repo root, so wrangler reads .dev.vars from there too.
+  const file = path.resolve(import.meta.dirname, "..", "..", ".dev.vars");
   if (!fs.existsSync(file)) return undefined;
   for (const line of fs.readFileSync(file, "utf8").split("\n")) {
     const match = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)$/);

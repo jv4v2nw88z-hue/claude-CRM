@@ -1,12 +1,21 @@
+// This lives at the repo root on purpose.
+//
+// One Worker spans both workspaces — it serves `client/dist` and runs
+// `server/src` — so the root is the only directory that contains all of it.
+// Keeping it in `server/` meant a plain `npx wrangler deploy` at the root found
+// no config at all, fell back to static-site detection, and shipped the *source*
+// `client/` directory: the browser was handed an index.html pointing at
+// /src/main.tsx, which is TypeScript it cannot execute, and rendered a blank
+// page with no API attached. The correct command should be the obvious one.
 {
-  "$schema": "node_modules/wrangler/config-schema.json",
+  "$schema": "server/node_modules/wrangler/config-schema.json",
   // Matches the Worker that actually exists in the account. The dashboard
   // derived it from the repository name (claude-CRM -> claudecrm) when the Git
   // build was connected, and that is the Worker serving the live URL — a
   // different name here would deploy a *second*, empty Worker alongside it and
   // leave the real one untouched.
   "name": "claudecrm",
-  "main": "src/index.ts",
+  "main": "server/src/index.ts",
   "compatibility_date": "2026-07-01",
   "compatibility_flags": ["nodejs_compat"],
 
@@ -19,7 +28,7 @@
   // an origin. `run_worker_first` keeps /api/* off the asset router, and the SPA
   // fallback hands every other unmatched path to index.html for React Router.
   "assets": {
-    "directory": "../client/dist",
+    "directory": "client/dist",
     "binding": "ASSETS",
     "not_found_handling": "single-page-application",
     "run_worker_first": ["/api/*"]
@@ -34,7 +43,7 @@
       "binding": "DB",
       "database_name": "midigitalexpansion-crm",
       "database_id": "c76d91ea-063a-4995-8ece-0727ca578e90",
-      "migrations_dir": "migrations"
+      "migrations_dir": "server/migrations"
     }
   ],
 

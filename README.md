@@ -36,7 +36,7 @@ You need a Cloudflare account on the **Workers Paid plan ($5/month)** — see [W
 
 > **Already done for the production account.** The D1 database
 > `midigitalexpansion-crm` exists (id `c76d91ea-…`, ENAM, already committed to
-> `server/wrangler.jsonc`), the schema is applied, and it holds the seeded users,
+> `wrangler.jsonc`), the schema is applied, and it holds the seeded users,
 > six automation rules and five founding clients. Steps 1, 4 and 5 below are
 > history for that account — what remains is `JWT_SECRET` (step 3) and the
 > deploy. Uploads are off until R2 is enabled; see step 2.
@@ -46,17 +46,16 @@ npm run install:all
 npx wrangler login
 ```
 
-**1. Create the database** and paste the id it prints into `d1_databases[0].database_id` in `server/wrangler.jsonc`:
+**1. Create the database** and paste the id it prints into `d1_databases[0].database_id` in `wrangler.jsonc`:
 
 ```bash
-cd server
 npx wrangler d1 create midigitalexpansion-crm
 ```
 
 **2. Create the documents bucket.** R2 has to be enabled on the account first — a
 one-time opt-in under **Storage & Databases → R2** that asks for a payment
 method. Until it is, the API refuses with `10042` and the `r2_buckets` block in
-`server/wrangler.jsonc` stays commented out, which leaves the Documents tab
+`wrangler.jsonc` stays commented out, which leaves the Documents tab
 reporting uploads disabled rather than erroring. Everything else works without it.
 
 ```bash
@@ -75,7 +74,6 @@ npx wrangler secret put RESEND_API_KEY    # optional: notification emails
 **4. Create the schema, then deploy:**
 
 ```bash
-cd ..
 npm run migrate:remote
 npm run deploy
 ```
@@ -108,14 +106,16 @@ To have Cloudflare build and deploy on every push, connect the repo under
 |---|---|
 | Root directory | `/` (leave it at the repo root) |
 | Build command | `npm run cf:build` (`npm run build` also works) |
-| Deploy command | `npx wrangler deploy --config server/wrangler.jsonc` |
+| Deploy command | `npx wrangler deploy` |
 
-The deploy command is the one that has to be exact. The root of this repo is a
-workspace, not a Worker — there's no `wrangler.jsonc` here — so a bare `npx
-wrangler deploy` finds no config, falls back to looking for a static-site
-directory, and fails with *"Could not detect a directory containing static
-files"*. `--config` points it at `server/`, from where it resolves `main`,
-`../client/dist` and `migrations/` correctly.
+`wrangler.jsonc` lives at the **repo root**, so the plain deploy command is the
+correct one — no `--config` needed. It used to live in `server/`, and that cost
+two failed deploys and a blank production site: with no config at the root,
+`wrangler deploy` falls back to static-site detection and ships the *source*
+`client/` directory. The browser then gets an `index.html` pointing at
+`/src/main.tsx` — TypeScript it cannot execute — and renders a blank page with no
+API attached. One Worker spans both workspaces, so its config belongs at the root
+that contains both.
 
 Either build command works because both start with `ensure:deps`. That matters
 more than it looks: the root has no dependencies of its own, so the provider's
@@ -133,7 +133,7 @@ and a few wasted seconds in CI.
 
 Steps 1–3 above still have to happen first, and the **`database_id` must be
 committed**: builds deploy what's in Git, so the placeholder in
-`server/wrangler.jsonc` will fail the deploy until the real id is pushed. Set
+`wrangler.jsonc` will fail the deploy until the real id is pushed. Set
 secrets on the Worker itself (**Settings → Variables and Secrets**, or
 `wrangler secret put`) — they are not build-time variables, and `cf:build` never
 sees them.
@@ -160,7 +160,7 @@ By default documents stream back through the Worker, so they stay behind the ses
 
 ```bash
 npm run install:all
-cp server/.dev.vars.example server/.dev.vars   # local secrets, gitignored
+cp .dev.vars.example .dev.vars                 # local secrets, gitignored
 
 npm run migrate:local                          # creates the local D1 file
 npm run dev:server                             # Worker on :8787
@@ -170,15 +170,16 @@ npm run dev:client                             # Vite on :5173, proxying /api
 
 Use `http://localhost:5173` for hot reload while working on the frontend, or `http://localhost:8787` to exercise exactly what production serves.
 
-Nothing touches your Cloudflare account until you deploy: `wrangler dev` runs D1 and R2 on disk under `server/.wrangler/`.
+Nothing touches your Cloudflare account until you deploy: `wrangler dev` runs D1 and R2 on disk under `.wrangler/` at the repo root.
 
 ---
 
 ## Project layout
 
 ```
+wrangler.jsonc               bindings, cron schedule, static assets, cron
+.dev.vars                    local secrets (gitignored)
 server/
-  wrangler.jsonc             bindings, cron schedule, static assets
   prisma/schema.prisma       data model
   prisma.config.ts           CLI-only config (the Worker uses the D1 binding)
   migrations/                plain .sql, applied by wrangler
@@ -323,7 +324,7 @@ npm run migrate:remote                   # then apply it for real
 
 Everything except `JWT_SECRET` is optional and degrades gracefully: with no `RESEND_API_KEY` notification emails log to the console, and with no R2 bucket bound the Documents tab explains that uploads are disabled rather than erroring.
 
-Plaintext settings live in `vars` in `server/wrangler.jsonc`; secrets are set with `npx wrangler secret put NAME`, and for local development in `server/.dev.vars`.
+Plaintext settings live in `vars` in `wrangler.jsonc`; secrets are set with `npx wrangler secret put NAME`, and for local development in `.dev.vars` at the repo root.
 
 | Name | Kind | Purpose |
 |---|---|---|
