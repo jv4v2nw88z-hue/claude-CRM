@@ -107,18 +107,29 @@ To have Cloudflare build and deploy on every push, connect the repo under
 | Field | Value |
 |---|---|
 | Root directory | `/` (leave it at the repo root) |
-| Build command | `npm run cf:build` |
+| Build command | `npm run cf:build` (`npm run build` also works) |
 | Deploy command | `npx wrangler deploy --config server/wrangler.jsonc` |
 
-Both fields matter. The root of this repo is a workspace, not a Worker — there's
-no `wrangler.jsonc` here — so a bare `npx wrangler deploy` finds no config, falls
-back to looking for a static-site directory, and fails with *"Could not detect a
-directory containing static files"*. `--config` points it at `server/`, from
-where it resolves `main`, `../client/dist` and `migrations/` correctly.
+The deploy command is the one that has to be exact. The root of this repo is a
+workspace, not a Worker — there's no `wrangler.jsonc` here — so a bare `npx
+wrangler deploy` finds no config, falls back to looking for a static-site
+directory, and fails with *"Could not detect a directory containing static
+files"*. `--config` points it at `server/`, from where it resolves `main`,
+`../client/dist` and `migrations/` correctly.
 
-`cf:build` installs both workspaces from their lockfiles, builds the React app
-into `client/dist`, and runs `prisma generate` — that last step is not optional,
-because the generated client is gitignored and the Worker won't bundle without it.
+Either build command works because both start with `ensure:deps`. That matters
+more than it looks: the root has no dependencies of its own, so the provider's
+own install step (it picks `bun install`) installs nothing and leaves `client/`
+and `server/` empty — the build then dies on `tsc: not found`, which reads like a
+missing devDependency rather than a missing install. `ensure:deps` installs
+either workspace whose binaries are absent, so it is a no-op locally and the real
+install in CI.
+
+`cf:build` is the leaner of the two: it builds the React app and runs `prisma
+generate`, and stops there. That last step is not optional — the generated client
+is gitignored, so a clean clone cannot bundle the Worker without it. Plain `build`
+does the same and then bundles the Worker as a dry run, which is a useful check
+and a few wasted seconds in CI.
 
 Steps 1–3 above still have to happen first, and the **`database_id` must be
 committed**: builds deploy what's in Git, so the placeholder in

@@ -7,7 +7,8 @@
     "install:all": "npm install --prefix server && npm install --prefix client",
     "dev:server": "npm run dev --prefix server",
     "dev:client": "npm run dev --prefix client",
-    "build": "npm run build --prefix client && npm run build --prefix server",
+    "ensure:deps": "node scripts/ensureDeps.mjs",
+    "build": "npm run ensure:deps && npm run build --prefix client && npm run build --prefix server",
     "typecheck": "npm run typecheck --prefix server && npm run typecheck --prefix client",
     "migrate:new": "npm run migrate:new --prefix server --",
     "migrate:local": "npm run migrate:local --prefix server",
@@ -15,7 +16,7 @@
     "seed:local": "npm run seed:local --prefix server",
     "seed:remote": "npm run seed:remote --prefix server",
     "deploy": "npm run build --prefix client && npm run deploy --prefix server",
-    "cf:build": "npm ci --prefix server && npm ci --prefix client && npm run build --prefix client && npm run codegen --prefix server",
+    "cf:build": "npm run ensure:deps && npm run build --prefix client && npm run codegen --prefix server",
     "qa:lifecycle": "npm run qa:lifecycle --prefix server"
   }
 }
