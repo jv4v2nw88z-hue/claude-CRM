@@ -105,15 +105,31 @@ export function createApp() {
     if (!assets) return c.json({ error: "Route not found" }, 404);
 
     const url = new URL(c.req.url);
+    const wantsHtml = (c.req.header("accept") ?? "").includes("text/html");
     const asset = await assets.fetch(new Request(url.toString(), { headers: c.req.raw.headers }));
-    if (asset.status !== 404) return asset;
 
-    // A client-side route rather than a real file: hand back the shell.
-    const shell = await assets.fetch(new Request(new URL("/index.html", url).toString()));
-    return new Response(shell.body, {
-      status: shell.ok ? 200 : 404,
-      headers: shell.headers,
-    });
+    // `not_found_handling` isn't doing SPA fallback for us — do it here.
+    if (asset.status === 404 && wantsHtml) {
+      const shell = await assets.fetch(new Request(new URL("/index.html", url).toString()));
+      return new Response(shell.body, {
+        status: shell.ok ? 200 : 404,
+        headers: shell.headers,
+      });
+    }
+
+    /*
+     * With `not_found_handling: "single-page-application"` the binding answers
+     * *every* unknown path with index.html and a 200 — right for a client-side
+     * route, wrong for a hashed bundle. A script served as text/html is refused
+     * on MIME grounds and renders the same blank page, except the real cause
+     * (the file was never uploaded) is now hidden behind a success status. 404
+     * honestly instead, so the failure names itself.
+     */
+    if (!wantsHtml && asset.ok && (asset.headers.get("content-type") ?? "").includes("text/html")) {
+      return c.text("Not found", 404);
+    }
+
+    return asset;
   });
 
   return app;

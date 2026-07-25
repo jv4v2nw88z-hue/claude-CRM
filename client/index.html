@@ -5,9 +5,125 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#3730A3" />
     <title>MiDigitalExpansion CRM</title>
+    <style>
+      /* Inline, because the whole point of this panel is to still work when the
+         stylesheet is one of the things that failed to load. */
+      #boot-status {
+        font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+        max-width: 34rem;
+        margin: 0 auto;
+        padding: 2rem 1.25rem;
+        color: #0f172a;
+      }
+      #boot-status h1 {
+        font-size: 1rem;
+        margin: 0 0 0.5rem;
+      }
+      #boot-status p {
+        font-size: 0.875rem;
+        line-height: 1.5;
+        color: #475569;
+        margin: 0 0 0.75rem;
+      }
+      #boot-status code {
+        display: block;
+        font-size: 0.75rem;
+        background: #f1f5f9;
+        border: 1px solid #e2e8f0;
+        border-radius: 0.5rem;
+        padding: 0.625rem;
+        overflow-wrap: break-word;
+        white-space: pre-wrap;
+        color: #0f172a;
+      }
+      #boot-spinner {
+        width: 1.5rem;
+        height: 1.5rem;
+        margin: 4rem auto;
+        border: 2px solid #e2e8f0;
+        border-top-color: #3730a3;
+        border-radius: 50%;
+        animation: boot-spin 0.7s linear infinite;
+      }
+      @keyframes boot-spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <!--
+        Replaced by React on mount. If the bundle never loads or throws before
+        mounting, the script below turns this into a readable report instead of
+        the blank white page that gives a phone user nothing to go on.
+      -->
+      <div id="boot-spinner"></div>
+    </div>
+
+    <!--
+      Deliberately ES5 and not a module: if the failure is that this browser
+      cannot run the modern bundle, `<script type="module">` never executes and
+      only a classic script is left to say so.
+    -->
+    <script>
+      (function () {
+        var failures = [];
+
+        function record(text) {
+          if (text && failures.indexOf(text) === -1) failures.push(text);
+        }
+
+        function report() {
+          if (window.__crmBooted) return;
+          var root = document.getElementById("root");
+          if (!root) return;
+
+          var detail = failures.length
+            ? failures.join("\n")
+            : "The page loaded but the app never started. The bundle may not have been uploaded with this deployment, or this browser may be too old to run it.";
+
+          root.innerHTML =
+            '<div id="boot-status">' +
+            "<h1>The CRM didn't finish loading</h1>" +
+            "<p>The page reached your browser, but the application code did not start. " +
+            "The detail below is what the browser reported.</p>" +
+            "<code></code>" +
+            '<p style="margin-top:0.75rem">Refresh once. If it repeats, this text is the ' +
+            "information needed to fix it.</p>" +
+            "</div>";
+          root.querySelector("code").textContent = detail;
+        }
+
+        // Capture phase catches resource errors (a 404 or MIME refusal on the
+        // bundle), which do not bubble.
+        window.addEventListener(
+          "error",
+          function (event) {
+            var target = event.target;
+            if (target && (target.tagName === "SCRIPT" || target.tagName === "LINK")) {
+              record("Failed to load " + (target.src || target.href));
+            } else if (event.message) {
+              record(event.message);
+            }
+            report();
+          },
+          true
+        );
+
+        window.addEventListener("unhandledrejection", function (event) {
+          var reason = event.reason;
+          record("Unhandled rejection: " + ((reason && reason.message) || reason));
+          report();
+        });
+
+        // Long enough not to fire on a slow cell connection, short enough to
+        // beat someone giving up on a white screen.
+        setTimeout(report, 10000);
+      })();
+    </script>
+
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

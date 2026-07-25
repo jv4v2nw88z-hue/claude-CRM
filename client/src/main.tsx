@@ -21,6 +21,16 @@ const queryClient = new QueryClient({
   },
 });
 
+// Tells the boot watchdog in index.html to stand down. Set before render rather
+// than after: if a provider throws, the ErrorBoundary inside App shows a real
+// message, and the watchdog replacing the DOM on top of it would only obscure it.
+declare global {
+  interface Window {
+    __crmBooted?: boolean;
+  }
+}
+window.__crmBooted = true;
+
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <QueryClientProvider client={queryClient}>
