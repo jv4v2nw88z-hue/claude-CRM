@@ -12,6 +12,23 @@ export class HttpError extends Error {
 }
 
 /**
+ * The server is missing a setting it cannot run without.
+ *
+ * Distinct from HttpError because it is not the caller's fault and the message
+ * is deliberately shown: a missing JWT_SECRET surfaced as a bare "Internal
+ * server error" on the login form, which tells whoever is trying to sign in
+ * nothing at all and looks identical to a real bug. Naming the missing variable
+ * leaks nothing — its *value* is the secret — and it is the difference between a
+ * one-minute dashboard fix and an afternoon of guessing.
+ */
+export class ConfigurationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ConfigurationError";
+  }
+}
+
+/**
  * Prisma's known-request errors are matched by their `P####` code rather than
  * `instanceof`. The generated client is bundled into the Worker, so an identity
  * check against a separately-imported class is fragile; the code is stable.
@@ -41,6 +58,12 @@ export function requireParam(c: Context, name: string): string {
 export function toErrorResponse(err: unknown, c: Context): Response {
   if (err instanceof HttpError) {
     return c.json({ error: err.message }, err.status as 400);
+  }
+
+  // 503, not 500: the request was fine, the deployment is incomplete.
+  if (err instanceof ConfigurationError) {
+    console.error("Configuration error:", err.message);
+    return c.json({ error: err.message }, 503);
   }
 
   if (err instanceof ZodError) {

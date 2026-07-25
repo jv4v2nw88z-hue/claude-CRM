@@ -7,15 +7,19 @@
  * and degrades gracefully, exactly as the Node version did.
  */
 
+import { ConfigurationError } from "../lib/http";
+
 export const JWT_SECRET_MIN_LENGTH = 16;
 
 /** Throws at the edge of the request rather than booting a half-configured app. */
 export function requireJwtSecret(env: Env): string {
   const secret = env.JWT_SECRET;
   if (!secret || secret.length < JWT_SECRET_MIN_LENGTH) {
-    throw new Error(
-      `JWT_SECRET is missing or too short (needs ${JWT_SECRET_MIN_LENGTH}+ characters). ` +
-        `Set it with: npx wrangler secret put JWT_SECRET`
+    throw new ConfigurationError(
+      `This deployment has no JWT_SECRET set, so sessions can't be signed and ` +
+        `nobody can sign in. Add it as a secret on the Worker (Settings → ` +
+        `Variables and Secrets, or \`npx wrangler secret put JWT_SECRET\`) using ` +
+        `${JWT_SECRET_MIN_LENGTH}+ random characters.`
     );
   }
   return secret;
