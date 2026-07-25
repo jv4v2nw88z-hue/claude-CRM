@@ -1,5 +1,11 @@
 import { Hono } from "hono";
 import { HttpError } from "../lib/http";
+import { currentUser } from "../middleware/requireAuth";
+import {
+  diffWatchedFields,
+  logFieldChanges,
+  WATCHED_DEAL_FIELDS,
+} from "../services/auditService";
 import { convertDealSchema, createDealSchema, updateDealSchema } from "../utils/validation";
 import type { AppEnv } from "../types";
 
@@ -39,6 +45,25 @@ router.patch("/:id", async (c) => {
       ...(stageChanged ? { stageChangedAt: new Date() } : {}),
     },
   });
+
+  /*
+   * Logged after the update, deliberately.
+   *
+   * D1 has no transactions, so these two writes cannot be atomic and the
+   * ordering is a choice about which partial outcome is survivable. An edit that
+   * lands without its log entry loses history; a log entry without its edit
+   * claims something happened that did not. The second is worse, so the edit
+   * goes first and the log never blocks it — logFieldChanges swallows its own
+   * failures for the same reason.
+   */
+  await logFieldChanges(
+    prisma,
+    "Deal",
+    id,
+    currentUser(c)?.id ?? null,
+    diffWatchedFields(existing, parsed.data, WATCHED_DEAL_FIELDS)
+  );
+
   return c.json(deal);
 });
 

@@ -1,6 +1,12 @@
 import { Hono } from "hono";
 import { requireParam } from "../lib/http";
 import { createRetainerSchema, updateRetainerSchema } from "../utils/validation";
+import { currentUser } from "../middleware/requireAuth";
+import {
+  diffWatchedFields,
+  logFieldChanges,
+  WATCHED_RETAINER_FIELDS,
+} from "../services/auditService";
 import type { AppEnv } from "../types";
 
 /** Mounted at /api/retainers */
@@ -23,14 +29,27 @@ retainersRouter.patch("/:id", async (c) => {
   const id = c.req.param("id");
   const data = { ...parsed.data };
 
+  // Read unconditionally now: the audit log needs the before-image, and the
+  // start-date backfill below already needed it on the path that matters.
+  const existing = await prisma.retainer.findUniqueOrThrow({ where: { id } });
+
   // Activating a retainer with no start date would leave it out of the MRR
   // trend entirely, so stamp today the moment money starts.
-  if (data.status === "ACTIVE" && !data.startDate) {
-    const existing = await prisma.retainer.findUniqueOrThrow({ where: { id } });
-    if (!existing.startDate) data.startDate = new Date();
+  if (data.status === "ACTIVE" && !data.startDate && !existing.startDate) {
+    data.startDate = new Date();
   }
 
   const retainer = await prisma.retainer.update({ where: { id }, data });
+
+  // After the update — see the note in deals.routes.ts on why this ordering.
+  await logFieldChanges(
+    prisma,
+    "Retainer",
+    id,
+    currentUser(c)?.id ?? null,
+    diffWatchedFields(existing, parsed.data, WATCHED_RETAINER_FIELDS)
+  );
+
   return c.json(retainer);
 });
 
