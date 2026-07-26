@@ -8,8 +8,10 @@ import type {
   Contact,
   DashboardSummary,
   Deal,
+  DealStageEntry,
   Document,
   Interaction,
+  PipelineStage,
   Retainer,
   RevenueSummary,
   Task,
@@ -140,6 +142,27 @@ export const dealsApi = {
   convert: (id: string, data: Record<string, unknown> = {}) =>
     api.post<ClientDetail>(`/deals/${id}/convert`, data),
   remove: (id: string) => api.delete<void>(`/deals/${id}`),
+  stageHistory: (id: string) =>
+    api.get<{ entries: DealStageEntry[] }>(`/deals/${id}/stage-history`),
+};
+
+// ---------------------------
+// Pipeline stages
+// ---------------------------
+
+export const pipelineStagesApi = {
+  list: () => api.get<PipelineStage[]>("/pipeline-stages"),
+  create: (data: { name: string; isWon?: boolean; isLost?: boolean }) =>
+    api.post<PipelineStage>("/pipeline-stages", data),
+  update: (id: string, data: { name?: string; isWon?: boolean; isLost?: boolean }) =>
+    api.patch<PipelineStage>(`/pipeline-stages/${id}`, data),
+  /** Sends the whole ordering, not one stage's index — see the route's comment. */
+  reorder: (ids: string[]) => api.patch<PipelineStage[]>("/pipeline-stages/reorder", { ids }),
+  remove: (id: string, reassignToId?: string) =>
+    api.delete<{ movedDeals: number }>(
+      `/pipeline-stages/${id}`,
+      reassignToId ? { reassignToId } : undefined
+    ),
 };
 
 // ---------------------------

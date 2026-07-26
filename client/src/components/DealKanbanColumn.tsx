@@ -1,25 +1,43 @@
 import { useDroppable } from "@dnd-kit/core";
 import clsx from "clsx";
-import type { Deal, DealStage } from "../types";
+import type { Deal, PipelineStage } from "../types";
 import { formatCurrency } from "../lib/format";
 import { DealCard } from "./DealCard";
 
-const STAGE_ACCENTS: Record<DealStage, string> = {
-  New: "border-t-slate-400",
-  Contacted: "border-t-blue-400",
-  Quoted: "border-t-amber-400",
-  Won: "border-t-emerald-500",
-  Lost: "border-t-red-400",
-};
+/**
+ * Column accents.
+ *
+ * This was a lookup keyed by stage name, which stops working the moment stages
+ * become renameable — a column called "Proposal Sent" would fall through to
+ * `undefined` and render with no top border at all. The outcome columns keep
+ * their meaning-carrying colours because those are semantic, not decorative;
+ * every other column cycles through a neutral ramp by position, so a board with
+ * nine custom stages still looks deliberate.
+ */
+const NEUTRAL_ACCENTS = [
+  "border-t-slate-400",
+  "border-t-blue-400",
+  "border-t-amber-400",
+  "border-t-violet-400",
+  "border-t-teal-400",
+];
+
+function accentFor(stage: PipelineStage, index: number): string {
+  if (stage.isWon) return "border-t-emerald-500";
+  if (stage.isLost) return "border-t-red-400";
+  return NEUTRAL_ACCENTS[index % NEUTRAL_ACCENTS.length];
+}
 
 interface DealKanbanColumnProps {
-  stage: DealStage;
+  stage: PipelineStage;
+  /** Board position, used only to pick a neutral accent colour. */
+  index: number;
   deals: Deal[];
   onOpenDeal: (deal: Deal) => void;
 }
 
-export function DealKanbanColumn({ stage, deals, onOpenDeal }: DealKanbanColumnProps) {
-  const { setNodeRef, isOver } = useDroppable({ id: stage });
+export function DealKanbanColumn({ stage, index, deals, onOpenDeal }: DealKanbanColumnProps) {
+  const { setNodeRef, isOver } = useDroppable({ id: stage.id });
   const total = deals.reduce((sum, d) => sum + (d.estimatedValue ?? 0), 0);
 
   return (
@@ -27,13 +45,13 @@ export function DealKanbanColumn({ stage, deals, onOpenDeal }: DealKanbanColumnP
       ref={setNodeRef}
       className={clsx(
         "flex min-h-[16rem] w-72 shrink-0 flex-col rounded-xl border border-t-4 bg-fill/15/60 p-3 transition-colors",
-        STAGE_ACCENTS[stage],
+        accentFor(stage, index),
         isOver ? "border-brand-400 bg-accent/10" : "border-separator/70"
       )}
     >
       <div className="mb-3 flex items-baseline justify-between">
         <h3 className="text-sm font-semibold text-ink/80">
-          {stage}
+          {stage.name}
           <span className="ml-1.5 text-xs font-normal text-ink/65">{deals.length}</span>
         </h3>
         {total > 0 && (

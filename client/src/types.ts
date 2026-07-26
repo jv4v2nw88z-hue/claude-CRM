@@ -25,7 +25,33 @@ export type UserRole = "SALES" | "TECHNICAL";
 
 export type RuleAnchor = "TIER_CHANGE" | "RETAINER_START" | "RETAINER_END";
 
-export type DealStage = "New" | "Contacted" | "Quoted" | "Won" | "Lost";
+/**
+ * Pipeline columns are rows in the database now, so there is no union of stage
+ * names to import. Anything that needs to know "is this the won column" asks
+ * `isWon` rather than comparing against a literal.
+ */
+export interface PipelineStage {
+  id: string;
+  name: string;
+  order: number;
+  isWon: boolean;
+  isLost: boolean;
+  /** Present on the list endpoint; drives the delete guard's warning copy. */
+  _count?: { deals: number };
+}
+
+export interface DealStageEntry {
+  id: string;
+  dealId: string;
+  fromStageId: string | null;
+  fromStageName: string | null;
+  toStageId: string | null;
+  /** Snapshotted at write time, so a later rename doesn't rewrite history. */
+  toStageName: string;
+  changedAt: string;
+  note: string | null;
+  changedBy: { id: string; name: string } | null;
+}
 
 export interface User {
   id: string;
@@ -169,7 +195,9 @@ export interface Deal {
   contactEmail: string | null;
   contactPhone: string | null;
   source: string | null;
-  stage: DealStage;
+  stageId: string;
+  /** Included by the API so a card can render its column without a second fetch. */
+  stage: PipelineStage;
   estimatedValue: number | null;
   notes: string | null;
   clientId: string | null;

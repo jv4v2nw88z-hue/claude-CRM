@@ -66,6 +66,7 @@ model User {
   auditedChanges      AuditLog[]            @relation("AuditChanges")
   clientAccess        AccountAccess[]       @relation("AccessGrantedTo")
   accessGrantsMade    AccountAccess[]       @relation("AccessGrantedBy")
+  dealStageChanges    DealStageEntry[]      @relation("DealStageChangedBy")
 }
 
 model Client {
@@ -267,18 +268,79 @@ model Deal {
   contactEmail   String?
   contactPhone   String?
   source         String? // "referral", "cold outreach", "instagram DM", etc.
-  stage          String   @default("New") // New, Contacted, Quoted, Won, Lost
+  /// The stage is a row now, not a string. Renaming "Quoted" to "Proposal Sent"
+  /// used to mean rewriting every Deal; it is now a single UPDATE on one row.
+  stageId        String
+  stage          PipelineStage @relation(fields: [stageId], references: [id])
   estimatedValue Float?
   notes          String?
   clientId       String? // set once converted
   client         Client?  @relation(fields: [clientId], references: [id])
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
+  /// When the deal last moved. Kept alongside the history table because the
+  /// kanban card's "N days in stage" counter is a hot read on every board
+  /// render, and walking the history for it would be a query per card.
   stageChangedAt DateTime @default(now())
   lostReason     String?
 
-  @@index([stage])
+  stageHistory DealStageEntry[]
+
+  @@index([stageId])
   @@index([clientId])
+}
+
+/// A column on the pipeline board.
+///
+/// `isWon` / `isLost` are flags rather than a name check because the whole point
+/// of the table is that names are editable: "Won" can be renamed to "Closed Won"
+/// and the conversion prompt, the open-pipeline total and the lifecycle test all
+/// have to keep working. Exactly one stage may carry each flag — enforced in the
+/// route, not the schema, since SQLite has no partial unique index here.
+model PipelineStage {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  /// Board order, left to right. Sparse values are fine; only the sort matters.
+  order     Int
+  isWon     Boolean  @default(false)
+  isLost    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  deals       Deal[]
+  movedFrom   DealStageEntry[] @relation("FromStage")
+  movedTo     DealStageEntry[] @relation("ToStage")
+
+  @@index([order])
+}
+
+/// Every stage transition a deal has made, not just the latest one.
+///
+/// Mirrors ServiceHistoryEntry, including its denormalised names: the FKs give
+/// the structural link the pipeline needs, and the name snapshots keep the
+/// timeline readable after a stage is renamed or deleted. Storing only the FK
+/// would make yesterday's history silently restate itself the moment someone
+/// renames a column, which is the opposite of what a history table is for.
+model DealStageEntry {
+  id     String @id @default(cuid())
+  dealId String
+  deal   Deal   @relation(fields: [dealId], references: [id], onDelete: Cascade)
+
+  /// Null for the entry that records a deal's starting stage.
+  fromStageId   String?
+  fromStage     PipelineStage? @relation("FromStage", fields: [fromStageId], references: [id], onDelete: SetNull)
+  fromStageName String?
+
+  toStageId   String?
+  toStage     PipelineStage? @relation("ToStage", fields: [toStageId], references: [id], onDelete: SetNull)
+  toStageName String
+
+  changedAt   DateTime @default(now())
+  changedById String?
+  changedBy   User?    @relation("DealStageChangedBy", fields: [changedById], references: [id])
+  note        String?
+
+  @@index([dealId, changedAt])
 }
 
 model Document {

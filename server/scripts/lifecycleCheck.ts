@@ -65,7 +65,12 @@ const post = <T>(path: string, body?: unknown) =>
   call<T>(path, { method: "POST", body: body === undefined ? undefined : JSON.stringify(body) });
 const patch = <T>(path: string, body: unknown) =>
   call<T>(path, { method: "PATCH", body: JSON.stringify(body) });
-const del = <T>(path: string) => call<T>(path, { method: "DELETE" });
+// Deleting a pipeline stage carries a body naming where its deals should go.
+const del = <T>(path: string, body?: unknown) =>
+  call<T>(path, {
+    method: "DELETE",
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
 
 function daysAgo(days: number): Date {
   const d = new Date();
@@ -130,23 +135,57 @@ async function main() {
 
   // --- Deal -> Client -----------------------------------------------------
   console.log("\nDeal → Client");
-  const deal = await post<{ id: string; stage: string }>("/deals", {
+  // Stages are rows now, so the board is read rather than assumed. Asserting on
+  // the flags instead of the names keeps this test honest after a rename.
+  interface Stage {
+    id: string;
+    name: string;
+    order: number;
+    isWon: boolean;
+    isLost: boolean;
+  }
+  const stages = await call<Stage[]>("/pipeline-stages");
+  check("exposes the pipeline stages", stages.length > 0);
+  check(
+    "orders stages and marks exactly one won and one lost",
+    stages.every((s, i) => i === 0 || stages[i - 1].order <= s.order) &&
+      stages.filter((s) => s.isWon).length === 1 &&
+      stages.filter((s) => s.isLost).length === 1
+  );
+
+  const firstStage = stages[0];
+  const wonStage = stages.find((s) => s.isWon)!;
+
+  type DealShape = { id: string; stageId: string; stage: Stage; clientId: string | null };
+  const deal = await post<DealShape>("/deals", {
     businessName: BUSINESS_NAME,
     contactName: "Jamie Rivera",
     contactEmail: "jamie@qa.example.com",
     source: "referral",
     estimatedValue: 3000,
   });
-  check("creates a deal in the New stage", deal.stage === "New");
+  check("creates a deal in the first pipeline stage", deal.stageId === firstStage.id);
 
   const client = await post<{ id: string; currentTier: string }>(`/deals/${deal.id}/convert`, {});
   check("converts the deal into a client at Website Build", client.currentTier === "WEBSITE_BUILD");
 
-  const deals = await call<{ id: string; stage: string; clientId: string | null }[]>("/deals");
+  const deals = await call<DealShape[]>("/deals");
   const convertedDeal = deals.find((d) => d.id === deal.id);
   check(
-    "marks the deal Won and links it to the client",
-    convertedDeal?.stage === "Won" && convertedDeal?.clientId === client.id
+    "moves the deal to the won stage and links it to the client",
+    convertedDeal?.stageId === wonStage.id && convertedDeal?.clientId === client.id
+  );
+
+  // The whole point of the history table: the move is recorded, not just the
+  // latest position. Two entries — created, then converted.
+  const history = await call<{
+    entries: { fromStageName: string | null; toStageName: string }[];
+  }>(`/deals/${deal.id}/stage-history`);
+  check(
+    "records both stage transitions in the deal's history",
+    history.entries.length === 2 &&
+      history.entries[0].toStageName === wonStage.name &&
+      history.entries[0].fromStageName === firstStage.name
   );
 
   const afterConvert = await clientDetail(client.id);
@@ -352,6 +391,46 @@ async function main() {
   );
   const stillThere = await clientDetail(client.id);
   check("the client row survives as an inactive record", stillThere.isActive === false);
+
+  // --- Pipeline stage management ------------------------------------------
+  /*
+   * The delete guard is the part worth testing over HTTP: it is the difference
+   * between removing a column and silently losing every deal sitting in it.
+   */
+  console.log("\nPipeline stages");
+  const tempStage = await post<Stage>("/pipeline-stages", { name: "QA Temporary Stage" });
+  check("creates a stage at the end of the board", tempStage.order > firstStage.order);
+
+  const renamed = await patch<Stage>(`/pipeline-stages/${tempStage.id}`, {
+    name: "QA Renamed Stage",
+  });
+  check("renames a stage without touching its deals", renamed.name === "QA Renamed Stage");
+
+  // Park the QA deal in the temp stage so the guard has something to protect.
+  await patch(`/deals/${deal.id}`, { stageId: tempStage.id });
+
+  const guarded = await fetch(`${BASE_URL}/api/pipeline-stages/${tempStage.id}`, {
+    method: "DELETE",
+    headers: { cookie },
+  });
+  check("refuses to delete a stage that still holds deals", guarded.status === 409);
+
+  const stillOnBoard = await call<Stage[]>("/pipeline-stages");
+  check(
+    "the refused delete left the stage in place",
+    stillOnBoard.some((s) => s.id === tempStage.id)
+  );
+
+  // With somewhere for the deals to go, the same delete succeeds.
+  await del(`/pipeline-stages/${tempStage.id}`, { reassignToId: wonStage.id });
+  const afterDelete = await call<Stage[]>("/pipeline-stages");
+  check(
+    "deletes the stage once its deals have somewhere to go",
+    !afterDelete.some((s) => s.id === tempStage.id)
+  );
+
+  const movedDeal = (await call<DealShape[]>("/deals")).find((d) => d.id === deal.id);
+  check("moves the orphaned deals rather than dropping them", movedDeal?.stageId === wonStage.id);
 
   // --- Cleanup ------------------------------------------------------------
   await del(`/deals/${deal.id}`);

@@ -1,6 +1,7 @@
 import type { PrismaClient } from "../generated/prisma/client";
 import { hashPassword } from "../lib/password";
 import type { RuleAnchor, ServiceTierType, TaskType } from "../domain/enums";
+import { DEFAULT_PIPELINE_STAGES } from "../utils/validation";
 
 /**
  * Seeding runs inside the Worker.
@@ -87,6 +88,8 @@ export async function runSeed(prisma: PrismaClient, env: Env): Promise<SeedResul
   const cole = await upsertUser("Cole", "cole@midigitalexpansion.com", "SALES");
 
   const rulesSeeded = await seedAutomationRules(prisma);
+  // Before any deal is written — a deal cannot exist without a stage to sit in.
+  await seedPipelineStages(prisma);
 
   const existingClients = await prisma.client.count();
   if (existingClients > 0) {
@@ -431,7 +434,7 @@ export async function runSeed(prisma: PrismaClient, env: Env): Promise<SeedResul
         contactEmail: "greg@marshallauto.example.com",
         contactPhone: "(269) 555-0155",
         source: "referral",
-        stage: "Quoted",
+        stageId: "stage_quoted",
         estimatedValue: 3500,
         notes: "Quoted a build plus brand curation. Waiting on his partner to sign off.",
         stageChangedAt: daysAgo(6),
@@ -441,7 +444,7 @@ export async function runSeed(prisma: PrismaClient, env: Env): Promise<SeedResul
         contactName: "Priya Nair",
         contactEmail: "priya@lakeviewfitness.example.com",
         source: "instagram DM",
-        stage: "Contacted",
+        stageId: "stage_contacted",
         estimatedValue: 2800,
         stageChangedAt: daysAgo(2),
       },
@@ -449,7 +452,7 @@ export async function runSeed(prisma: PrismaClient, env: Env): Promise<SeedResul
         businessName: "Cedar Street Barbers",
         contactName: "Owen Cole",
         source: "cold outreach",
-        stage: "New",
+        stageId: "stage_new",
         estimatedValue: 2200,
         stageChangedAt: daysAgo(1),
       },
@@ -469,6 +472,32 @@ export async function runSeed(prisma: PrismaClient, env: Env): Promise<SeedResul
         : `Seeded 5 clients and 3 deals. Users already existed, so no passwords were ` +
           `issued or reset.`,
   };
+}
+
+/**
+ * The starting pipeline columns.
+ *
+ * Migration 0006 already inserts these, so on a migrated database every upsert
+ * is a no-op. It runs anyway because the seed has to work against a database
+ * built from `prisma db push` too, where no migration ever ran.
+ *
+ * `update: {}` deliberately: re-seeding must never undo a rename or a reorder
+ * someone has since made. Only a missing stage is created.
+ */
+async function seedPipelineStages(prisma: PrismaClient): Promise<void> {
+  for (const stage of DEFAULT_PIPELINE_STAGES) {
+    await prisma.pipelineStage.upsert({
+      where: { id: stage.id },
+      update: {},
+      create: {
+        id: stage.id,
+        name: stage.name,
+        order: stage.order,
+        isWon: stage.isWon,
+        isLost: stage.isLost,
+      },
+    });
+  }
 }
 
 async function seedAutomationRules(prisma: PrismaClient): Promise<number> {

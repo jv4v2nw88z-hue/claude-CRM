@@ -10,34 +10,42 @@ import {
   type DragEndEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Settings2, Trash2 } from "lucide-react";
 import {
   useConvertDeal,
   useCreateDeal,
   useDeals,
   useDeleteDeal,
+  usePipelineStages,
   useUpdateDeal,
 } from "../hooks/queries";
-import type { Deal, DealStage } from "../types";
+import { useAuth } from "../context/AuthContext";
+import type { Deal, PipelineStage } from "../types";
 import { formatCurrency } from "../lib/format";
 import { ConfirmModal } from "../components/ConfirmModal";
 import { DealCard } from "../components/DealCard";
 import { DealKanbanColumn } from "../components/DealKanbanColumn";
+import { DealStageHistory } from "../components/DealStageHistory";
+import { ManageStagesPanel } from "../components/ManageStagesPanel";
 import { SlideOverPanel } from "../components/SlideOverPanel";
 import { Button, ErrorNotice, Field, Skeleton } from "../components/ui";
 
-const STAGES: DealStage[] = ["New", "Contacted", "Quoted", "Won", "Lost"];
-
 export function Deals() {
   const dealsQuery = useDeals();
+  const stagesQuery = usePipelineStages();
   const updateDeal = useUpdateDeal();
   const convertDeal = useConvertDeal();
   const navigate = useNavigate();
+  const { user } = useAuth();
 
   const [activeDeal, setActiveDeal] = useState<Deal | null>(null);
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<Deal | null>(null);
   const [converting, setConverting] = useState<Deal | null>(null);
+  const [managingStages, setManagingStages] = useState(false);
+
+  const stages = useMemo(() => stagesQuery.data ?? [], [stagesQuery.data]);
+  const isTechnical = user?.role === "TECHNICAL";
 
   // A little travel before a drag starts, so tapping a card on mobile still opens it.
   // KeyboardSensor makes the board operable without a pointer at all: focus a
@@ -48,13 +56,16 @@ export function Deals() {
   );
 
   const dealsByStage = useMemo(() => {
-    const map = new Map<DealStage, Deal[]>(STAGES.map((s) => [s, []]));
+    const map = new Map<string, Deal[]>(stages.map((s) => [s.id, []]));
     for (const deal of dealsQuery.data ?? []) {
-      const bucket = map.get(deal.stage) ?? map.get("New")!;
-      bucket.push(deal);
+      // Falls back to the first column if a deal somehow points at a stage the
+      // board doesn't have — better a visible card in the wrong place than a
+      // deal that renders nowhere at all.
+      const bucket = map.get(deal.stageId) ?? map.get(stages[0]?.id ?? "");
+      bucket?.push(deal);
     }
     return map;
-  }, [dealsQuery.data]);
+  }, [dealsQuery.data, stages]);
 
   const handleDragStart = (event: DragStartEvent) => {
     setActiveDeal((event.active.data.current as { deal: Deal } | undefined)?.deal ?? null);
@@ -66,16 +77,18 @@ export function Deals() {
     if (!over) return;
 
     const deal = (active.data.current as { deal: Deal } | undefined)?.deal;
-    const newStage = over.id as DealStage;
-    if (!deal || deal.stage === newStage) return;
+    const target = stages.find((s) => s.id === over.id);
+    if (!deal || !target || deal.stageId === target.id) return;
 
-    // Landing in Won is the moment a prospect becomes a client — confirm, don't assume.
-    if (newStage === "Won" && !deal.clientId) {
-      setConverting({ ...deal, stage: newStage });
+    // Landing in the won column is the moment a prospect becomes a client —
+    // confirm, don't assume. Keyed off the flag, not the name, so a renamed
+    // column keeps prompting.
+    if (target.isWon && !deal.clientId) {
+      setConverting({ ...deal, stageId: target.id, stage: target });
       return;
     }
 
-    updateDeal.mutate({ id: deal.id, data: { stage: newStage } });
+    updateDeal.mutate({ id: deal.id, data: { stageId: target.id } });
   };
 
   const handleConvert = async () => {
@@ -86,15 +99,17 @@ export function Deals() {
   };
 
   const handleConvertCancel = async () => {
-    // They still dragged it to Won — record the stage, just don't create a client.
+    // They still dragged it to the won column — record the move, just don't
+    // create a client. `converting` already carries the target stage.
     if (converting) {
-      await updateDeal.mutateAsync({ id: converting.id, data: { stage: "Won" } });
+      await updateDeal.mutateAsync({ id: converting.id, data: { stageId: converting.stageId } });
     }
     setConverting(null);
   };
 
+  // Open pipeline excludes both outcome columns, by flag rather than by name.
   const pipelineValue = (dealsQuery.data ?? [])
-    .filter((d) => d.stage !== "Won" && d.stage !== "Lost")
+    .filter((d) => !d.stage?.isWon && !d.stage?.isLost)
     .reduce((sum, d) => sum + (d.estimatedValue ?? 0), 0);
 
   return (
@@ -106,10 +121,19 @@ export function Deals() {
             {formatCurrency(pipelineValue)} in open pipeline
           </p>
         </div>
-        <Button onClick={() => setCreating(true)}>
-          <Plus className="h-4 w-4" aria-hidden />
-          New Deal
-        </Button>
+        <div className="flex gap-2">
+          {/* Hidden for SALES as a courtesy; the API is the actual gate. */}
+          {isTechnical && (
+            <Button variant="secondary" onClick={() => setManagingStages(true)}>
+              <Settings2 className="h-4 w-4" aria-hidden />
+              Stages
+            </Button>
+          )}
+          <Button onClick={() => setCreating(true)}>
+            <Plus className="h-4 w-4" aria-hidden />
+            New Deal
+          </Button>
+        </div>
       </div>
 
       {dealsQuery.isError && (
@@ -119,20 +143,21 @@ export function Deals() {
         />
       )}
 
-      {dealsQuery.isLoading ? (
+      {dealsQuery.isLoading || stagesQuery.isLoading ? (
         <div className="flex gap-4 overflow-x-auto">
-          {STAGES.map((stage) => (
-            <Skeleton key={stage} className="h-64 w-72 shrink-0" />
+          {[0, 1, 2, 3, 4].map((i) => (
+            <Skeleton key={i} className="h-64 w-72 shrink-0" />
           ))}
         </div>
       ) : (
         <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
           <div className="flex gap-4 overflow-x-auto pb-4">
-            {STAGES.map((stage) => (
+            {stages.map((stage, index) => (
               <DealKanbanColumn
-                key={stage}
+                key={stage.id}
                 stage={stage}
-                deals={dealsByStage.get(stage) ?? []}
+                index={index}
+                deals={dealsByStage.get(stage.id) ?? []}
                 onOpenDeal={setEditing}
               />
             ))}
@@ -149,11 +174,14 @@ export function Deals() {
         key={editing?.id ?? "new"}
         open={creating || editing !== null}
         deal={editing}
+        stages={stages}
         onClose={() => {
           setCreating(false);
           setEditing(null);
         }}
       />
+
+      <ManageStagesPanel open={managingStages} onClose={() => setManagingStages(false)} />
 
       <ConfirmModal
         open={converting !== null}
@@ -178,10 +206,12 @@ export function Deals() {
 function DealPanel({
   open,
   deal,
+  stages,
   onClose,
 }: {
   open: boolean;
   deal: Deal | null;
+  stages: PipelineStage[];
   onClose: () => void;
 }) {
   const isEdit = deal !== null;
@@ -200,7 +230,8 @@ function DealPanel({
   const [contactEmail, setContactEmail] = useState(deal?.contactEmail ?? "");
   const [contactPhone, setContactPhone] = useState(deal?.contactPhone ?? "");
   const [source, setSource] = useState(deal?.source ?? "");
-  const [stage, setStage] = useState<DealStage>(deal?.stage ?? "New");
+  // New deals default to the first column on the board, whatever it's called.
+  const [stageId, setStageId] = useState(deal?.stageId ?? stages[0]?.id ?? "");
   const [estimatedValue, setEstimatedValue] = useState(
     deal?.estimatedValue !== null && deal?.estimatedValue !== undefined
       ? String(deal.estimatedValue)
@@ -208,6 +239,9 @@ function DealPanel({
   );
   const [notes, setNotes] = useState(deal?.notes ?? "");
   const [lostReason, setLostReason] = useState(deal?.lostReason ?? "");
+
+  /** Drives the lost-reason field and the payload, by flag rather than by name. */
+  const selectedStage = stages.find((s) => s.id === stageId) ?? null;
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -218,10 +252,11 @@ function DealPanel({
       contactEmail: contactEmail.trim() || null,
       contactPhone: contactPhone.trim() || null,
       source: source.trim() || null,
-      stage,
+      stageId,
       estimatedValue: estimatedValue ? Number(estimatedValue) : null,
       notes: notes.trim() || null,
-      lostReason: stage === "Lost" ? lostReason.trim() || null : null,
+      // Cleared unless the deal is landing in the lost column, by flag not name.
+      lostReason: selectedStage?.isLost ? lostReason.trim() || null : null,
     };
 
     try {
@@ -327,12 +362,12 @@ function DealPanel({
               <select
                 id="deal-stage"
                 className="input"
-                value={stage}
-                onChange={(e) => setStage(e.target.value as DealStage)}
+                value={stageId}
+                onChange={(e) => setStageId(e.target.value)}
               >
-                {STAGES.map((option) => (
-                  <option key={option} value={option}>
-                    {option}
+                {stages.map((option) => (
+                  <option key={option.id} value={option.id}>
+                    {option.name}
                   </option>
                 ))}
               </select>
@@ -360,7 +395,7 @@ function DealPanel({
             />
           </Field>
 
-          {stage === "Lost" && (
+          {selectedStage?.isLost && (
             <Field label="Lost reason" htmlFor="deal-lost">
               <input
                 id="deal-lost"
@@ -382,6 +417,15 @@ function DealPanel({
           </Field>
 
           {error && <p className="text-sm text-danger">{error}</p>}
+
+          {isEdit && deal && (
+            <div className="border-t border-separator/60 pt-4">
+              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink/65">
+                Stage history
+              </h3>
+              <DealStageHistory dealId={deal.id} />
+            </div>
+          )}
 
           {isEdit && deal && !deal.clientId && (
             <div className="rounded-lg border border-accent/30 bg-accent/10 p-3">

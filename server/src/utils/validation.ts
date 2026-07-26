@@ -31,7 +31,21 @@ export const RETAINER_STATUSES = Object.values(RetainerStatus) as [
 ];
 export const RULE_ANCHORS = Object.values(RuleAnchor) as [RuleAnchor, ...RuleAnchor[]];
 
-export const DEAL_STAGES = ["New", "Contacted", "Quoted", "Won", "Lost"] as const;
+/**
+ * The stages the database is seeded with.
+ *
+ * No longer a validation enum — stages are rows and a deal's stage is checked by
+ * foreign key, not by matching this list. It survives as the seed's starting set
+ * and as the names migration 0006 assigns fixed ids to. Validating against it
+ * would defeat the entire feature.
+ */
+export const DEFAULT_PIPELINE_STAGES = [
+  { id: "stage_new", name: "New", order: 100, isWon: false, isLost: false },
+  { id: "stage_contacted", name: "Contacted", order: 200, isWon: false, isLost: false },
+  { id: "stage_quoted", name: "Quoted", order: 300, isWon: false, isLost: false },
+  { id: "stage_won", name: "Won", order: 400, isWon: true, isLost: false },
+  { id: "stage_lost", name: "Lost", order: 500, isWon: false, isLost: true },
+] as const;
 
 export const tierEnum = z.enum(SERVICE_TIERS);
 
@@ -205,13 +219,44 @@ export const createDealSchema = z.object({
   contactEmail: optionalString,
   contactPhone: optionalString,
   source: optionalString,
-  stage: z.enum(DEAL_STAGES).optional(),
+  // Optional on create: omitting it drops the deal in the first column, which is
+  // what "new lead" means. The value is checked against the table, not a list.
+  stageId: z.string().trim().min(1).optional(),
   estimatedValue: money.optional().nullable(),
   notes: optionalString,
   lostReason: optionalString,
 });
 
 export const updateDealSchema = createDealSchema.partial();
+
+// ---------------------------
+// Pipeline stages
+// ---------------------------
+
+export const createPipelineStageSchema = z.object({
+  name: z.string().trim().min(1).max(40),
+  isWon: z.boolean().optional(),
+  isLost: z.boolean().optional(),
+});
+
+/// Name is optional here so a rename and a flag toggle are separate edits.
+export const updatePipelineStageSchema = z.object({
+  name: z.string().trim().min(1).max(40).optional(),
+  isWon: z.boolean().optional(),
+  isLost: z.boolean().optional(),
+});
+
+/// Reorder takes the whole board at once. Sending the full ordering rather than
+/// one stage's new index means the result can't depend on which order a series
+/// of single-stage writes happened to land in.
+export const reorderPipelineStagesSchema = z.object({
+  ids: z.array(z.string().trim().min(1)).min(1),
+});
+
+/// Deleting a stage that still holds deals needs somewhere to put them.
+export const deletePipelineStageSchema = z.object({
+  reassignToId: z.string().trim().min(1).optional(),
+});
 
 export const convertDealSchema = z.object({
   accountOwnerId: optionalString,

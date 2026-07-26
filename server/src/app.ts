@@ -15,6 +15,7 @@ import { clientRetainersRouter, retainersRouter } from "./routes/retainers.route
 import tasksRoutes from "./routes/tasks.routes";
 import { clientInteractionsRouter, interactionsRouter } from "./routes/interactions.routes";
 import dealsRoutes from "./routes/deals.routes";
+import pipelineStagesRoutes from "./routes/pipelineStages.routes";
 import { clientDocumentsRouter, documentsRouter } from "./routes/documents.routes";
 import { clientAccessRouter } from "./routes/access.routes";
 import dashboardRoutes from "./routes/dashboard.routes";
@@ -67,6 +68,7 @@ export function createApp() {
   api.route("/tasks", tasksRoutes);
   api.route("/interactions", interactionsRouter);
   api.route("/deals", dealsRoutes);
+  api.route("/pipeline-stages", pipelineStagesRoutes);
   api.route("/documents", documentsRouter);
   api.route("/dashboard", dashboardRoutes);
   api.route("/automation-rules", automationRulesRoutes);

@@ -138,6 +138,13 @@ export function diffWatchedFields<T extends Record<string, unknown>>(
   return changes;
 }
 
-/** The money-carrying fields. Extend these lists to watch more. */
-export const WATCHED_DEAL_FIELDS = ["estimatedValue", "stage"] as const;
+/**
+ * The money-carrying fields. Extend these lists to watch more.
+ *
+ * `stage` left this list when it became a foreign key: diffing it here would
+ * write raw stage ids into the audit trail, which reads as noise next to
+ * "$3,500 → $4,000". deals.routes.ts logs the transition by name instead, so the
+ * client history still shows it — see the explicit entry there.
+ */
+export const WATCHED_DEAL_FIELDS = ["estimatedValue"] as const;
 export const WATCHED_RETAINER_FIELDS = ["monthlyAmount", "status"] as const;

@@ -52,7 +52,13 @@ export const api = {
     request<T>(path, { method: "POST", body: form }),
   patch: <T>(path: string, body: unknown) =>
     request<T>(path, { method: "PATCH", body: JSON.stringify(body) }),
-  delete: <T>(path: string) => request<T>(path, { method: "DELETE" }),
+  // A body is optional and rare, but deleting a pipeline stage has to say where
+  // its remaining deals should go, and that doesn't belong in the query string.
+  delete: <T>(path: string, body?: unknown) =>
+    request<T>(path, {
+      method: "DELETE",
+      body: body === undefined ? undefined : JSON.stringify(body),
+    }),
 };
 
 /** Builds `?a=1&b=2`, dropping empty values so callers don't have to. */

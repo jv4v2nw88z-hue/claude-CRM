@@ -7,6 +7,7 @@ import {
   dealsApi,
   documentsApi,
   interactionsApi,
+  pipelineStagesApi,
   retainersApi,
   tasksApi,
   usersApi,
@@ -22,6 +23,8 @@ export const queryKeys = {
   retainers: () => ["retainers"] as const,
   clientRetainers: (clientId: string) => ["retainers", clientId] as const,
   deals: () => ["deals"] as const,
+  dealStageHistory: (id: string) => ["deal-stage-history", id] as const,
+  pipelineStages: () => ["pipeline-stages"] as const,
   documents: (clientId: string) => ["documents", clientId] as const,
   documentConfig: () => ["documents", "config"] as const,
   dashboard: () => ["dashboard", "summary"] as const,
@@ -44,6 +47,10 @@ function useInvalidateAll() {
     queryClient.invalidateQueries({ queryKey: ["retainers"] });
     queryClient.invalidateQueries({ queryKey: ["dashboard"] });
     queryClient.invalidateQueries({ queryKey: ["deals"] });
+    // A stage change writes a history row, and the board's per-column counts
+    // move whenever a deal does.
+    queryClient.invalidateQueries({ queryKey: ["deal-stage-history"] });
+    queryClient.invalidateQueries({ queryKey: ["pipeline-stages"] });
   };
 }
 
@@ -334,6 +341,68 @@ export function useConvertDeal() {
 export function useDeleteDeal() {
   const invalidate = useInvalidateAll();
   return useMutation({ mutationFn: (id: string) => dealsApi.remove(id), onSuccess: invalidate });
+}
+
+export function useDealStageHistory(dealId: string | null) {
+  return useQuery({
+    queryKey: queryKeys.dealStageHistory(dealId ?? ""),
+    queryFn: () => dealsApi.stageHistory(dealId!),
+    enabled: Boolean(dealId),
+  });
+}
+
+// ---------------------------
+// Pipeline stages
+// ---------------------------
+
+export function usePipelineStages() {
+  return useQuery({
+    queryKey: queryKeys.pipelineStages(),
+    queryFn: pipelineStagesApi.list,
+    // The board can't render without these and they change rarely, so they stay
+    // fresh long enough not to refetch on every navigation back to Deals.
+    staleTime: 5 * 60_000,
+  });
+}
+
+export function useCreatePipelineStage() {
+  const invalidate = useInvalidateAll();
+  return useMutation({
+    mutationFn: (data: { name: string; isWon?: boolean; isLost?: boolean }) =>
+      pipelineStagesApi.create(data),
+    onSuccess: invalidate,
+  });
+}
+
+export function useUpdatePipelineStage() {
+  const invalidate = useInvalidateAll();
+  return useMutation({
+    mutationFn: ({
+      id,
+      data,
+    }: {
+      id: string;
+      data: { name?: string; isWon?: boolean; isLost?: boolean };
+    }) => pipelineStagesApi.update(id, data),
+    onSuccess: invalidate,
+  });
+}
+
+export function useReorderPipelineStages() {
+  const invalidate = useInvalidateAll();
+  return useMutation({
+    mutationFn: (ids: string[]) => pipelineStagesApi.reorder(ids),
+    onSuccess: invalidate,
+  });
+}
+
+export function useDeletePipelineStage() {
+  const invalidate = useInvalidateAll();
+  return useMutation({
+    mutationFn: ({ id, reassignToId }: { id: string; reassignToId?: string }) =>
+      pipelineStagesApi.remove(id, reassignToId),
+    onSuccess: invalidate,
+  });
 }
 
 // ---------------------------
